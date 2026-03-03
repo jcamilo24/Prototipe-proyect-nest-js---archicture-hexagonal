@@ -1,0 +1,87 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { TransactionController } from '../../../../src/transaction/infrastructure/entrypoints/controller/transaction.controller';
+import { CreateTransferUseCase } from '../../../../src/transaction/application/use-cases/create-transfer.use-case';
+import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
+
+describe('TransactionController', () => {
+  let controller: TransactionController;
+  let createTransferUseCase: { execute: jest.Mock };
+
+  const validRequestBody = {
+    transaction: {
+      id: 'tx-002',
+      amount: 111000,
+      moneda: 'USD',
+      descripcion: 'Recarga celular',
+      receptor: {
+        documento: '3006985758',
+        tipoDocumento: 'CC',
+        nombre: 'MI EMPRESA S.A.S',
+        cuenta: '323232',
+        tipoCuenta: 'Ahorros',
+      },
+    },
+  };
+
+  const mockUseCaseResult = {
+    transaction: new Transaction(
+      'tx-002',
+      111000,
+      'USD',
+      'Recarga celular',
+      '3006985758',
+      'CC',
+      'MI EMPRESA S.A.S',
+      '323232',
+      'Ahorros',
+      'SUCCESS',
+    ),
+    externalResponse: {
+      externalId: 'e2e-123',
+      status: 'SUCCESS',
+      traceId: 'trace-abc',
+      qrCodeId: 'qr-xyz',
+      eventDate: '2025-02-27T12:00:00Z',
+    },
+  };
+
+  beforeEach(async () => {
+    createTransferUseCase = { execute: jest.fn().mockResolvedValue(mockUseCaseResult) };
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [TransactionController],
+      providers: [
+        { provide: CreateTransferUseCase, useValue: createTransferUseCase },
+      ],
+    }).compile();
+
+    controller = module.get<TransactionController>(TransactionController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  it('should map request to entity and return response with id, status and external data', async () => {
+    const response = await controller.create(validRequestBody);
+
+    expect(createTransferUseCase.execute).toHaveBeenCalledTimes(1);
+    const passedTransaction = createTransferUseCase.execute.mock.calls[0][0];
+    expect(passedTransaction).toBeInstanceOf(Transaction);
+    expect(passedTransaction.id).toBe('tx-002');
+    expect(passedTransaction.amount).toBe(111000);
+    expect(passedTransaction.receiverDocument).toBe('3006985758');
+    expect(passedTransaction.status).toBe('PENDING');
+
+    expect(response).toEqual({
+      id: 'tx-002',
+      status: 'SUCCESS',
+      end_to_end_id: 'e2e-123',
+      qr_code_id: 'qr-xyz',
+      properties: {
+        event_date: '2025-02-27T12:00:00Z',
+        trace_id: 'trace-abc',
+      },
+    });
+  });
+});

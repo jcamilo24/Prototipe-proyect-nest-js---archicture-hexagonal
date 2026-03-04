@@ -83,22 +83,18 @@ describe('BrebAdapter', () => {
   });
 
   it('should throw when external service returns invalid structure', async () => {
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
     httpService.post.mockReturnValue(
       of({ data: { status: 'SUCCESS' }, status: 200 }),
     );
 
     await expect(adapter.sendTransfer(mockTransaction)).rejects.toThrow();
-    consoleSpy.mockRestore();
   });
 
   it('should throw when HTTP request fails', async () => {
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
     httpService.post.mockReturnValue(
       throwError(() => new Error('Network error')),
     );
 
     await expect(adapter.sendTransfer(mockTransaction)).rejects.toThrow();
-    consoleSpy.mockRestore();
   });
 });

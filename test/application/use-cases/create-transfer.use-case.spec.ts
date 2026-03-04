@@ -1,4 +1,3 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { CreateTransferUseCase } from '../../../src/transaction/application/use-cases/create-transfer.use-case';
 import { Transaction } from '../../../src/transaction/domain/entity/transaction.entity';
 
@@ -28,21 +27,15 @@ describe('CreateTransferUseCase', () => {
     eventDate: '2025-02-27T12:00:00Z',
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     transactionRepository = { save: jest.fn().mockResolvedValue(undefined) };
     externalTransferService = {
       sendTransfer: jest.fn().mockResolvedValue(mockExternalResponse),
     };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CreateTransferUseCase,
-        { provide: 'TransactionRepository', useValue: transactionRepository },
-        { provide: 'ExternalTransferService', useValue: externalTransferService },
-      ],
-    }).compile();
-
-    useCase = module.get<CreateTransferUseCase>(CreateTransferUseCase);
+    useCase = new CreateTransferUseCase(
+      transactionRepository as any,
+      externalTransferService as any,
+    );
   });
 
   it('should be defined', () => {

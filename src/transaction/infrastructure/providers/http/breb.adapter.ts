@@ -40,7 +40,7 @@ export class BrebAdapter implements ExternalTransferService {
 
       if (!response || !response.data) {
         throw new Error('Empty response from external transfer service');
-      }
+      } 
 
       const data = response.data;
       const end_to_end_id = data.end_to_end_id ?? data.endToEndId;
@@ -51,10 +51,6 @@ export class BrebAdapter implements ExternalTransferService {
       const qr_code_id = data.qr_code_id ?? data.qrCodeId;
 
       if (!end_to_end_id || !status || !trace_id) {
-        console.error(
-          '[BrebAdapter] Invalid structure. Received:',
-          JSON.stringify(data, null, 2),
-        );
         throw new Error(
           'Invalid response structure from external service (expected end_to_end_id, status, properties.trace_id)',
         );
@@ -67,14 +63,7 @@ export class BrebAdapter implements ExternalTransferService {
         qrCodeId: qr_code_id,
         eventDate: event_date,
       };
-    } catch (error: any) {
-      const status = error.response?.status;
-      const data = error.response?.data;
-      console.error(
-        '[BrebAdapter] External transfer failed:',
-        status ? `HTTP ${status}` : error.message,
-        data ? JSON.stringify(data) : '',
-      );
+    } catch {
       throw new InternalServerErrorException(
         'External transfer service unavailable',
       );

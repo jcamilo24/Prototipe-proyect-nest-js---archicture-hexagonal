@@ -1,4 +1,3 @@
-import { Inject, Injectable } from '@nestjs/common';
 import { Transaction } from '../../domain/entity/transaction.entity';
 import type { TransactionRepository } from '../../domain/providers/transaction.repository';
 import type {
@@ -11,12 +10,9 @@ export interface CreateTransferResult {
   externalResponse: ExternalTransferResult;
 }
 
-@Injectable()
 export class CreateTransferUseCase {
   constructor(
-    @Inject('TransactionRepository')
     private readonly transactionRepository: TransactionRepository,
-    @Inject('ExternalTransferService')
     private readonly externalTransferService: ExternalTransferService,
   ) {}
 

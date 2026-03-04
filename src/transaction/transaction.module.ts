@@ -19,7 +19,18 @@ import {
   ],
   controllers: [TransactionController],
   providers: [
-    CreateTransferUseCase,
+    {
+      provide: CreateTransferUseCase,
+      useFactory: (
+        transactionRepository: TransactionRepositoryImpl,
+        externalTransferService: BrebAdapter,
+      ) =>
+        new CreateTransferUseCase(
+          transactionRepository,
+          externalTransferService,
+        ),
+      inject: ['TransactionRepository', 'ExternalTransferService'],
+    },
     {
       provide: 'TransactionRepository',
       useClass: TransactionRepositoryImpl,

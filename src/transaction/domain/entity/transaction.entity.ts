@@ -10,5 +10,6 @@ export class Transaction {
     public receiverAccount: string,
     public receiverAccountType: string,
     public status: string,
+    public transactionDate: Date = new Date(),
   ) {}
 }

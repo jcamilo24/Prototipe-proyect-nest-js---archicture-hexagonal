@@ -61,14 +61,14 @@ describe('TransactionController (e2e)', () => {
       transaction: {
         id: 'tx-e2e-001',
         amount: 50000,
-        moneda: 'PESOS',
-        descripcion: 'Test e2e',
-        receptor: {
-          documento: '12345678',
-          tipoDocumento: 'CC',
-          nombre: 'Usuario Test',
-          cuenta: '9876543210',
-          tipoCuenta: 'Ahorros',
+        currency: 'PESOS',
+        description: 'Test e2e',
+        receiver: {
+          document: '12345678',
+          documentType: 'CC',
+          name: 'Usuario Test',
+          account: '9876543210',
+          accountType: 'Ahorros',
         },
       },
     };
@@ -100,14 +100,14 @@ describe('TransactionController (e2e)', () => {
       transaction: {
         id: 'tx-e2e-002',
         amount: 100000,
-        moneda: 'USD',
-        descripcion: 'Transfer e2e',
-        receptor: {
-          documento: '87654321',
-          tipoDocumento: 'CC',
-          nombre: 'Receptor E2E',
-          cuenta: '111111',
-          tipoCuenta: 'Ahorros',
+        currency: 'USD',
+        description: 'Transfer e2e',
+        receiver: {
+          document: '87654321',
+          documentType: 'CC',
+          name: 'Receptor E2E',
+          account: '111111',
+          accountType: 'Ahorros',
         },
       },
     };

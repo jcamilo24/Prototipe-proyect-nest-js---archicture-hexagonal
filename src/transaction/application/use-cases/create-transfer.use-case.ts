@@ -4,6 +4,7 @@ import type {
   ExternalTransferResult,
   ExternalTransferService,
 } from '../../domain/providers/external-transfer.service';
+import { throwUseCaseError } from '../../../common/errors/use-case-error.mapper';
 
 export interface CreateTransferResult {
   transaction: Transaction;
@@ -17,12 +18,25 @@ export class CreateTransferUseCase {
   ) {}
 
   async execute(transaction: Transaction): Promise<CreateTransferResult> {
-    const externalResponse =
-      await this.externalTransferService.sendTransfer(transaction);
+    let externalResponse: ExternalTransferResult;
+
+    try {
+      externalResponse =
+        await this.externalTransferService.sendTransfer(transaction);
+    } catch (err) {
+      throwUseCaseError(
+        err,
+        `(step: external transfer)`,
+      );
+    }
 
     transaction.status = externalResponse.status;
 
-    await this.transactionRepository.save(transaction);
+    try {
+      await this.transactionRepository.save(transaction);
+    } catch (err) {
+      throwUseCaseError(err, `(step: persist)`);
+    }
 
     return {
       transaction,

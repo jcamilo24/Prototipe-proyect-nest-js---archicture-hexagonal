@@ -3,7 +3,8 @@ import { Document } from 'mongoose';
 
 @Schema({ collection: 'transactions', timestamps: true })
 export class TransactionDocument extends Document {
-  @Prop({ required: true })
+
+  @Prop({ required: true, unique: true })
   id: string;
 
   @Prop({ required: true })
@@ -12,7 +13,7 @@ export class TransactionDocument extends Document {
   @Prop({ required: true })
   currency: string;
 
-  @Prop({ required: true })
+  @Prop()
   description: string;
 
   @Prop({ required: true })
@@ -21,17 +22,20 @@ export class TransactionDocument extends Document {
   @Prop({ required: true })
   receiverDocumentType: string;
 
-  @Prop({ required: true })
+  @Prop()
   receiverName: string;
 
   @Prop({ required: true })
   receiverAccount: string;
 
-  @Prop({ required: true })
+  @Prop({ default: 'AHORROS' })
   receiverAccountType: string;
 
   @Prop({ required: true })
   status: string;
+
+  @Prop({ required: true, default: () => new Date() })
+  transactionDate: Date;
 }
 
 export const TransactionSchema =

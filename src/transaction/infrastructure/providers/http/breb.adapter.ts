@@ -1,12 +1,13 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { lastValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
+import { throwHttpClientError } from '../../../../common/errors/http-client-error.mapper';
 import { Transaction } from '../../../domain/entity/transaction.entity';
 import type {
   ExternalTransferResult,
   ExternalTransferService,
 } from '../../../domain/providers/external-transfer.service';
-
+import { mapBrebResponseToTransferResult } from './breb-response.mapper';
 @Injectable()
 export class BrebAdapter implements ExternalTransferService {
   constructor(private readonly httpService: HttpService) {}
@@ -34,39 +35,13 @@ export class BrebAdapter implements ExternalTransferService {
       process.env.BREB_BASE_URL ?? 'http://localhost:3001/transfer';
 
     try {
-      const response = await lastValueFrom(
+      const response = await firstValueFrom(
         this.httpService.post(brebBaseUrl, request),
       );
-
-      if (!response || !response.data) {
-        throw new Error('Empty response from external transfer service');
-      } 
-
-      const data = response.data;
-      const end_to_end_id = data.end_to_end_id ?? data.endToEndId;
-      const status = data.status;
-      const properties = data.properties ?? {};
-      const trace_id = properties.trace_id ?? properties.traceId;
-      const event_date = properties.event_date ?? properties.eventDate;
-      const qr_code_id = data.qr_code_id ?? data.qrCodeId;
-
-      if (!end_to_end_id || !status || !trace_id) {
-        throw new Error(
-          'Invalid response structure from external service (expected end_to_end_id, status, properties.trace_id)',
-        );
-      }
-
-      return {
-        externalId: end_to_end_id,
-        status,
-        traceId: trace_id,
-        qrCodeId: qr_code_id,
-        eventDate: event_date,
-      };
-    } catch {
-      throw new InternalServerErrorException(
-        'External transfer service unavailable',
-      );
+      const data = response?.data;
+      return mapBrebResponseToTransferResult(data);
+    } catch (err) {
+      throwHttpClientError(err);
     }
   }
 }

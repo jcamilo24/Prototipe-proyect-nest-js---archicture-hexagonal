@@ -11,14 +11,14 @@ describe('TransactionController', () => {
     transaction: {
       id: 'tx-002',
       amount: 111000,
-      moneda: 'USD',
-      descripcion: 'Recarga celular',
-      receptor: {
-        documento: '3006985758',
-        tipoDocumento: 'CC',
-        nombre: 'MI EMPRESA S.A.S',
-        cuenta: '323232',
-        tipoCuenta: 'Ahorros',
+      currency: 'USD',
+      description: 'Recarga celular',
+      receiver: {
+        document: '3006985758',
+        documentType: 'CC',
+        name: 'MI EMPRESA S.A.S',
+        account: '323232',
+        accountType: 'Ahorros',
       },
     },
   };

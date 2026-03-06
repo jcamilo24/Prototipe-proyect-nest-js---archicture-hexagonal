@@ -9,6 +9,8 @@ import {
   TransactionDocument,
   TransactionSchema,
 } from './infrastructure/providers/persistence/transaction.schema';
+import { RedisProvider } from 'src/common/redis/redis.provider';
+import { RedisIdempotencyService } from './infrastructure/idempotency/redis-idempotency.service';
 
 @Module({
   imports: [
@@ -19,6 +21,11 @@ import {
   ],
   controllers: [TransactionController],
   providers: [
+    RedisProvider,
+    {
+      provide: 'IdempotencyService',
+      useClass: RedisIdempotencyService,
+    },
     {
       provide: CreateTransferUseCase,
       useFactory: (

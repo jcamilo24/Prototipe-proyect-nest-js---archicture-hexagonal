@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { TransactionController } from '../../../../src/transaction/infrastructure/entrypoints/controller/transaction.controller';
 import { CreateTransferUseCase } from '../../../../src/transaction/application/use-cases/create-transfer.use-case';
 import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
@@ -6,6 +7,7 @@ import { Transaction } from '../../../../src/transaction/domain/entity/transacti
 describe('TransactionController', () => {
   let controller: TransactionController;
   let createTransferUseCase: { execute: jest.Mock };
+  let idempotencyService: { handle: jest.Mock };
 
   const validRequestBody = {
     transaction: {
@@ -47,11 +49,17 @@ describe('TransactionController', () => {
 
   beforeEach(async () => {
     createTransferUseCase = { execute: jest.fn().mockResolvedValue(mockUseCaseResult) };
+    idempotencyService = {
+      handle: jest.fn().mockImplementation(
+        async (_key, _hash, execute) => execute(),
+      ),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TransactionController],
       providers: [
         { provide: CreateTransferUseCase, useValue: createTransferUseCase },
+        { provide: 'IdempotencyService', useValue: idempotencyService },
       ],
     }).compile();
 
@@ -63,9 +71,10 @@ describe('TransactionController', () => {
   });
 
   it('should map request to entity and return response with id, status and external data', async () => {
-    const response = await controller.create(validRequestBody);
+    const response = await controller.create('transfer-001', validRequestBody);
 
     expect(createTransferUseCase.execute).toHaveBeenCalledTimes(1);
+    expect(idempotencyService.handle).toHaveBeenCalledTimes(1);
     const passedTransaction = createTransferUseCase.execute.mock.calls[0][0];
     expect(passedTransaction).toBeInstanceOf(Transaction);
     expect(passedTransaction.id).toBe('tx-002');
@@ -83,5 +92,11 @@ describe('TransactionController', () => {
         trace_id: 'trace-abc',
       },
     });
+  });
+
+  it('should fail when idempotency key is missing', async () => {
+    await expect(
+      controller.create(undefined as never, validRequestBody),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

@@ -1,10 +1,7 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { throwPersistenceError } from '../../../../common/errors/persistence-error.mapper';
+import { throwPersistenceError } from './persistence-error.mapper';
 import { Transaction } from '../../../domain/entity/transaction.entity';
 import type { TransactionRepository } from '../../../domain/providers/transaction.repository';
 import { TransactionDocument } from './transaction.schema';
@@ -40,10 +37,7 @@ export class TransactionRepositoryImpl implements TransactionRepository {
         );
       }
     } catch (err) {
-      throwPersistenceError(
-        err,
-        `(transactionId=${transaction.id})`,
-      );
+      throwPersistenceError(err, `(transactionId=${transaction.id})`);
     }
   }
 }

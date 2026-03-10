@@ -4,7 +4,7 @@ import type {
   ExternalTransferResult,
   ExternalTransferService,
 } from '../../domain/providers/external-transfer.service';
-import { throwUseCaseError } from '../../../common/errors/use-case-error.mapper';
+import { throwUseCaseError } from '../errors/use-case-error.helper';
 
 export interface CreateTransferResult {
   transaction: Transaction;
@@ -24,10 +24,7 @@ export class CreateTransferUseCase {
       externalResponse =
         await this.externalTransferService.sendTransfer(transaction);
     } catch (err) {
-      throwUseCaseError(
-        err,
-        `(step: external transfer)`,
-      );
+      throwUseCaseError(err, `(step: external transfer)`);
     }
 
     transaction.status = externalResponse.status;

@@ -6,6 +6,10 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 
+/**
+ * Maps persistence errors (MongoDB/Mongoose) to Nest HTTP exceptions.
+ * Preserves context and cause for logging.
+ */
 export function throwPersistenceError(err: unknown, context: string): never {
   if (err instanceof HttpException) throw err;
 
@@ -16,10 +20,10 @@ export function throwPersistenceError(err: unknown, context: string): never {
       ? (err as { code: number }).code
       : undefined;
   if (mongoCode === 11000) {
-    throw new ConflictException(
-      `${context}: duplicate transaction id`,
-      { cause, description: 'Duplicate transaction id' },
-    );
+    throw new ConflictException(`${context}: duplicate transaction id`, {
+      cause,
+      description: 'Duplicate transaction id',
+    });
   }
 
   const msg = cause.message?.toLowerCase() ?? '';
@@ -42,14 +46,14 @@ export function throwPersistenceError(err: unknown, context: string): never {
     'name' in err &&
     err.name === 'ValidationError'
   ) {
-    throw new UnprocessableEntityException(
-      `${context}: validation failed`,
-      { cause, description: 'Mongoose validation failed' },
-    );
+    throw new UnprocessableEntityException(`${context}: validation failed`, {
+      cause,
+      description: 'Mongoose validation failed',
+    });
   }
 
-  throw new InternalServerErrorException(
-    `${context}: persistence error`,
-    { cause, description: cause.message },
-  );
+  throw new InternalServerErrorException(`${context}: persistence error`, {
+    cause,
+    description: cause.message,
+  });
 }

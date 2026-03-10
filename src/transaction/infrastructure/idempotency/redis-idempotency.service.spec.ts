@@ -24,10 +24,7 @@ describe('RedisIdempotencyService', () => {
       }),
     } as unknown as ConfigService;
 
-    service = new RedisIdempotencyService(
-      redis as never,
-      configService,
-    );
+    service = new RedisIdempotencyService(redis as never, configService);
   });
 
   it('returns cached response for same key and same payload', async () => {
@@ -51,11 +48,7 @@ describe('RedisIdempotencyService', () => {
       id: 'should-not-run',
     });
 
-    const result = await service.handle(
-      'transfer-002',
-      'same-hash',
-      execute,
-    );
+    const result = await service.handle('transfer-002', 'same-hash', execute);
 
     expect(result).toEqual(cachedResponse);
     expect(execute).not.toHaveBeenCalled();
@@ -87,11 +80,7 @@ describe('RedisIdempotencyService', () => {
       status: 'SUCCESS',
     });
 
-    const result = await service.handle(
-      'transfer-004',
-      'new-hash',
-      execute,
-    );
+    const result = await service.handle('transfer-004', 'new-hash', execute);
 
     expect(execute).toHaveBeenCalledTimes(1);
     expect(result).toEqual({

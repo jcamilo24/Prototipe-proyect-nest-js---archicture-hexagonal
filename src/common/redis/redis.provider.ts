@@ -6,10 +6,7 @@ export const RedisProvider = {
   useFactory: (configService: ConfigService) => {
     return new Redis({
       host: configService.get<string>('REDIS_HOST') ?? 'localhost',
-      port: parseInt(
-        configService.get<string>('REDIS_PORT') ?? '6379',
-        10,
-      ),
+      port: parseInt(configService.get<string>('REDIS_PORT') ?? '6379', 10),
     });
   },
   inject: [ConfigService],

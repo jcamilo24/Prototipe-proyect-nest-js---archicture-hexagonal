@@ -10,7 +10,10 @@ import { CreateTransferUseCase } from '../../../application/use-cases/create-tra
 import type { IdempotencyService } from '../../../domain/providers/idempotency.service';
 import type { CreateTransferRequest } from '../model/create-transfer.request';
 import type { CreateTransferResponse } from '../model/create-transfer.response';
-import { mapRequestToEntity, mapResultToResponse } from './transaction-request.mapper';
+import {
+  mapRequestToEntity,
+  mapResultToResponse,
+} from './transaction-request.mapper';
 import { generateRequestHash } from 'src/common/helpers/hash.helper';
 
 @Controller('transactions')

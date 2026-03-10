@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { throwHttpClientError } from '../../../../common/errors/http-client-error.mapper';
+import type { AxiosResponse } from 'axios';
+import { throwHttpClientError } from './http-client-error.mapper';
 import { Transaction } from '../../../domain/entity/transaction.entity';
 import type {
   ExternalTransferResult,
@@ -19,29 +20,43 @@ export class BrebAdapter implements ExternalTransferService {
       transaction: {
         id: transaction.id,
         amount: transaction.amount,
-        moneda: transaction.currency,
-        descripcion: transaction.description,
-        receptor: {
-          documento: transaction.receiverDocument,
-          tipoDocumento: transaction.receiverDocumentType,
-          nombre: transaction.receiverName,
-          cuenta: transaction.receiverAccount,
-          tipoCuenta: transaction.receiverAccountType,
+        currency: transaction.currency,
+        description: transaction.description,
+        receiver: {
+          document: transaction.receiverDocument,
+          documentType: transaction.receiverDocumentType,
+          name: transaction.receiverName,
+          account: transaction.receiverAccount,
+          accountType: transaction.receiverAccountType,
         },
       },
     };
-
     const brebBaseUrl =
       process.env.BREB_BASE_URL ?? 'http://localhost:3001/transfer';
-
-    try {
-      const response = await firstValueFrom(
-        this.httpService.post(brebBaseUrl, request),
-      );
-      const data = response?.data;
-      return mapBrebResponseToTransferResult(data);
-    } catch (err) {
-      throwHttpClientError(err);
+      const delays = [0, 100, 300, 1000];
+      for (let attempt = 0; attempt < delays.length; attempt++) {
+        try {
+          if (delays[attempt] > 0) {
+            await this.sleep(delays[attempt]);
+          }
+          const response = (await firstValueFrom(
+            this.httpService.post(brebBaseUrl, request),
+          )) as AxiosResponse<unknown>;
+          const data: unknown = response?.data;
+          return mapBrebResponseToTransferResult(data);
+        } catch (err) {
+          const lastAttempt = attempt === delays.length - 1;
+          if (lastAttempt) {
+            throwHttpClientError(err);
+          }
+          console.warn(`BREB retry ${attempt + 1} failed`);
+        }
+      }
+      throw new Error('BREB transfer failed after retries');
+    }
+    private async sleep(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
     }
   }
-}
+
+  

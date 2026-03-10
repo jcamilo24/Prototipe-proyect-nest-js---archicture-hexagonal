@@ -1,5 +1,7 @@
 import { CreateTransferUseCase } from '../../../src/transaction/application/use-cases/create-transfer.use-case';
 import { Transaction } from '../../../src/transaction/domain/entity/transaction.entity';
+import type { TransactionRepository } from '../../../src/transaction/domain/providers/transaction.repository';
+import type { ExternalTransferService } from '../../../src/transaction/domain/providers/external-transfer.service';
 
 describe('CreateTransferUseCase', () => {
   let useCase: CreateTransferUseCase;
@@ -33,8 +35,8 @@ describe('CreateTransferUseCase', () => {
       sendTransfer: jest.fn().mockResolvedValue(mockExternalResponse),
     };
     useCase = new CreateTransferUseCase(
-      transactionRepository as any,
-      externalTransferService as any,
+      transactionRepository as unknown as TransactionRepository,
+      externalTransferService as unknown as ExternalTransferService,
     );
   });
 

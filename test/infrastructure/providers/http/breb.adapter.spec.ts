@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
 import { of, throwError } from 'rxjs';
+import type { AxiosResponse } from 'axios';
 import { BrebAdapter } from '../../../../src/transaction/infrastructure/providers/http/breb.adapter';
 import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
 
@@ -21,7 +22,7 @@ describe('BrebAdapter', () => {
     'PENDING',
   );
 
-  const validBrebResponse = {
+  const validBrebResponse: AxiosResponse = {
     data: {
       end_to_end_id: 'e2e-123',
       qr_code_id: 'qr-456',
@@ -32,16 +33,16 @@ describe('BrebAdapter', () => {
       },
     },
     status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: {} as AxiosResponse['config'],
   };
 
   beforeEach(async () => {
     httpService = { post: jest.fn().mockReturnValue(of(validBrebResponse)) };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        BrebAdapter,
-        { provide: HttpService, useValue: httpService },
-      ],
+      providers: [BrebAdapter, { provide: HttpService, useValue: httpService }],
     }).compile();
 
     adapter = module.get<BrebAdapter>(BrebAdapter);
@@ -51,24 +52,28 @@ describe('BrebAdapter', () => {
     expect(adapter).toBeDefined();
   });
 
-  it('should send transfer with transaction in puntored format and return mapped result', async () => {
+  it('should send transfer with transaction in English format and return mapped result', async () => {
     const result = await adapter.sendTransfer(mockTransaction);
 
     expect(httpService.post).toHaveBeenCalledTimes(1);
-    const [url, body] = httpService.post.mock.calls[0];
+    const firstCall = httpService.post.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    const [url, body] = firstCall;
     expect(url).toBeDefined();
     expect(body).toEqual({
       transaction: {
         id: 'tx-001',
         amount: 100000,
-        moneda: 'PESOS',
-        descripcion: 'Recarga',
-        receptor: {
-          documento: '123456',
-          tipoDocumento: 'CC',
-          nombre: 'Juan Pérez',
-          cuenta: '1234567890',
-          tipoCuenta: 'Ahorros',
+        currency: 'PESOS',
+        description: 'Recarga',
+        receiver: {
+          document: '123456',
+          documentType: 'CC',
+          name: 'Juan Pérez',
+          account: '1234567890',
+          accountType: 'Ahorros',
         },
       },
     });

@@ -18,8 +18,7 @@ export class RedisIdempotencyService implements IdempotencyService {
     private readonly configService: ConfigService,
   ) {
     this.keyPrefix =
-      this.configService.get<string>('IDEMPOTENCY_KEY_PREFIX') ??
-      'idempotency';
+      this.configService.get<string>('IDEMPOTENCY_KEY_PREFIX') ?? 'idempotency';
     this.ttlSeconds = Number(
       this.configService.get<string>('IDEMPOTENCY_TTL_SECONDS') ?? '86400',
     );

@@ -3,7 +3,6 @@ import { Document } from 'mongoose';
 
 @Schema({ collection: 'transactions', timestamps: true })
 export class TransactionDocument extends Document {
-
   @Prop({ required: true, unique: true })
   id: string;
 

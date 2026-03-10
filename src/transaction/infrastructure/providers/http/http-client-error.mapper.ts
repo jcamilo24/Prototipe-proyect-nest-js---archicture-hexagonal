@@ -12,6 +12,10 @@ interface AxiosErrorLike {
   response?: { status?: number; data?: unknown };
 }
 
+/**
+ * Maps HTTP client errors (e.g. Axios) to Nest HTTP exceptions.
+ * Preserves cause for logging.
+ */
 export function throwHttpClientError(err: unknown): never {
   if (err instanceof HttpException) throw err;
 
@@ -43,10 +47,10 @@ export function throwHttpClientError(err: unknown): never {
 
     if (status != null) {
       if (status >= 500) {
-        throw new BadGatewayException(
-          `external service error (${status})`,
-          { cause, description: `Upstream returned ${status}` },
-        );
+        throw new BadGatewayException(`external service error (${status})`, {
+          cause,
+          description: `Upstream returned ${status}`,
+        });
       }
       if (status >= 400) {
         throw new BadGatewayException(
@@ -61,14 +65,14 @@ export function throwHttpClientError(err: unknown): never {
     msg.includes('empty response') ||
     msg.includes('invalid response structure')
   ) {
-    throw new InternalServerErrorException(
-      `${cause.message}`,
-      { cause, description: cause.message },
-    );
+    throw new InternalServerErrorException(`${cause.message}`, {
+      cause,
+      description: cause.message,
+    });
   }
 
-  throw new InternalServerErrorException(
-    `external service call failed`,
-    { cause, description: cause.message },
-  );
+  throw new InternalServerErrorException(`external service call failed`, {
+    cause,
+    description: cause.message,
+  });
 }

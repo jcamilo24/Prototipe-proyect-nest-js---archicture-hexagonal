@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { TransactionController } from '../../../../src/transaction/infrastructure/entrypoints/controller/transaction.controller';
 import { CreateTransferUseCase } from '../../../../src/transaction/application/use-cases/create-transfer.use-case';
 import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
+import type { CreateTransferResponse } from '../../../../src/transaction/infrastructure/entrypoints/model/create-transfer.response';
 
 describe('TransactionController', () => {
   let controller: TransactionController;
@@ -48,11 +49,19 @@ describe('TransactionController', () => {
   };
 
   beforeEach(async () => {
-    createTransferUseCase = { execute: jest.fn().mockResolvedValue(mockUseCaseResult) };
+    createTransferUseCase = {
+      execute: jest.fn().mockResolvedValue(mockUseCaseResult),
+    };
     idempotencyService = {
-      handle: jest.fn().mockImplementation(
-        async (_key, _hash, execute) => execute(),
-      ),
+      handle: jest
+        .fn()
+        .mockImplementation(
+          (
+            _key: string,
+            _hash: string,
+            execute: () => Promise<CreateTransferResponse>,
+          ) => execute(),
+        ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -71,11 +80,16 @@ describe('TransactionController', () => {
   });
 
   it('should map request to entity and return response with id, status and external data', async () => {
-    const response = await controller.create('transfer-001', validRequestBody);
+    const response: CreateTransferResponse = await controller.create(
+      'transfer-001',
+      validRequestBody,
+    );
 
     expect(createTransferUseCase.execute).toHaveBeenCalledTimes(1);
     expect(idempotencyService.handle).toHaveBeenCalledTimes(1);
-    const passedTransaction = createTransferUseCase.execute.mock.calls[0][0];
+    const firstCallArgs = createTransferUseCase.execute.mock
+      .calls[0] as unknown as [Transaction];
+    const passedTransaction = firstCallArgs[0];
     expect(passedTransaction).toBeInstanceOf(Transaction);
     expect(passedTransaction.id).toBe('tx-002');
     expect(passedTransaction.amount).toBe(111000);
@@ -85,11 +99,11 @@ describe('TransactionController', () => {
     expect(response).toEqual({
       id: 'tx-002',
       status: 'SUCCESS',
-      end_to_end_id: 'e2e-123',
-      qr_code_id: 'qr-xyz',
+      endToEndId: 'e2e-123',
+      qrCodeId: 'qr-xyz',
       properties: {
-        event_date: '2025-02-27T12:00:00Z',
-        trace_id: 'trace-abc',
+        eventDate: '2025-02-27T12:00:00Z',
+        traceId: 'trace-abc',
       },
     });
   });

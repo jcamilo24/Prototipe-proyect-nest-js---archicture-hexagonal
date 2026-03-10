@@ -4,51 +4,22 @@ import { TransactionStatus } from 'src/transaction/domain/transaction-status.enu
 import { CreateTransferRequest } from '../model/create-transfer.request';
 import { CreateTransferResponse } from '../model/create-transfer.response';
 
-type IncomingTransactionBody = CreateTransferRequest['transaction'] & {
-  receptor?: {
-    documento?: string;
-    tipoDocumento?: string;
-    nombre?: string;
-    cuenta?: string;
-    tipoCuenta?: string;
-  };
-  moneda?: string;
-  descripcion?: string;
-};
+export function mapRequestToEntity(
+  request: CreateTransferRequest,
+): Transaction {
+  const t = request.transaction;
 
-type ReceiverLike =
-  | { document?: string; documentType?: string; name?: string; account?: string; accountType?: string }
-  | { documento?: string; tipoDocumento?: string; nombre?: string; cuenta?: string; tipoCuenta?: string };
-
-function getReceiverFields(t: IncomingTransactionBody) {
-  const receiver = (t.receiver ?? t.receptor) as ReceiverLike | undefined;
-  if (!receiver) {
-    throw new BadRequestException(
-      'transaction.receiver or transaction.receptor is required',
-    );
+  if (!t.receiver) {
+    throw new BadRequestException('transaction.receiver is required');
   }
-  const r = receiver as Record<string, string | undefined>;
-  return {
-    document: r.document ?? r.documento ?? '',
-    documentType: r.documentType ?? r.tipoDocumento ?? '',
-    name: r.name ?? r.nombre ?? '',
-    account: r.account ?? r.cuenta ?? '',
-    accountType: r.accountType ?? r.tipoCuenta ?? '',
-  };
-}
 
-export function mapRequestToEntity(request: CreateTransferRequest): Transaction {
-  const t = request.transaction as IncomingTransactionBody;
-  const { document, documentType, name, account, accountType } =
-    getReceiverFields(t);
-  const currency = t.currency ?? t.moneda ?? '';
-  const description = t.description ?? t.descripcion ?? '';
+  const { document, documentType, name, account, accountType } = t.receiver;
 
   return new Transaction(
     t.id,
     t.amount,
-    currency,
-    description,
+    t.currency,
+    t.description,
     document,
     documentType,
     name,
@@ -72,11 +43,11 @@ export function mapResultToResponse(result: {
   return {
     id: transaction.id,
     status: transaction.status,
-    end_to_end_id: externalResponse.externalId,
-    qr_code_id: externalResponse.qrCodeId,
+    endToEndId: externalResponse.externalId,
+    qrCodeId: externalResponse.qrCodeId,
     properties: {
-      event_date: externalResponse.eventDate,
-      trace_id: externalResponse.traceId,
+      eventDate: externalResponse.eventDate,
+      traceId: externalResponse.traceId,
     },
   };
 }

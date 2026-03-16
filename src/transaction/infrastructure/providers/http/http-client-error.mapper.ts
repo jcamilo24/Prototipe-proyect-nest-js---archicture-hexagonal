@@ -5,18 +5,14 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 
-interface AxiosErrorLike {
+type AxiosErrorLike = {
   isAxiosError?: boolean;
   code?: string;
   message?: string;
   response?: { status?: number; data?: unknown };
 }
 
-/**
- * Maps HTTP client errors (e.g. Axios) to Nest HTTP exceptions.
- * Preserves cause for logging.
- */
-export function throwHttpClientError(err: unknown): never {
+export function throwHttpClientError(err: unknown): void {
   if (err instanceof HttpException) throw err;
 
   const cause = err instanceof Error ? err : new Error(String(err));
@@ -59,6 +55,20 @@ export function throwHttpClientError(err: unknown): never {
         );
       }
     }
+  }
+
+  const code = (cause as NodeJS.ErrnoException).code?.toLowerCase();
+  if (
+    code === 'econnrefused' ||
+    code === 'econnreset' ||
+    code === 'enotfound' ||
+    msg.includes('timeout') ||
+    msg.includes('network')
+  ) {
+    throw new ServiceUnavailableException(
+      `external service unreachable or timeout`,
+      { cause, description: 'HTTP client network/timeout error' },
+    );
   }
 
   if (

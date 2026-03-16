@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { throwPersistenceError } from './persistence-error.mapper';
@@ -8,12 +12,18 @@ import { TransactionDocument } from './transaction.schema';
 
 @Injectable()
 export class TransactionRepositoryImpl implements TransactionRepository {
+  private readonly logger = new Logger(TransactionRepositoryImpl.name);
+
   constructor(
     @InjectModel(TransactionDocument.name)
     private readonly model: Model<TransactionDocument>,
   ) {}
 
   async save(transaction: Transaction): Promise<void> {
+    this.logger.log(
+      `save started | transactionId=${transaction.id} status=${transaction.status}`,
+    );
+
     const payload = {
       id: transaction.id,
       amount: transaction.amount,
@@ -25,6 +35,7 @@ export class TransactionRepositoryImpl implements TransactionRepository {
       receiverAccount: transaction.receiverAccount,
       receiverAccountType: transaction.receiverAccountType,
       status: transaction.status,
+      finalizedAt: transaction.finalizedAt ?? undefined,
       transactionDate: transaction.transactionDate ?? new Date(),
     };
 
@@ -36,6 +47,7 @@ export class TransactionRepositoryImpl implements TransactionRepository {
           { cause: new Error('Mongoose create returned null/undefined') },
         );
       }
+      this.logger.log(`save completed | transactionId=${transaction.id}`);
     } catch (err) {
       throwPersistenceError(err, `(transactionId=${transaction.id})`);
     }

@@ -58,7 +58,15 @@ describe('TransactionController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       controllers: [TransactionController],
       providers: [
-        CreateTransferUseCase,
+        {
+          provide: CreateTransferUseCase,
+          useFactory: (transactionRepository, externalTransferService) =>
+            new CreateTransferUseCase(
+              transactionRepository,
+              externalTransferService,
+            ),
+          inject: ['TransactionRepository', 'ExternalTransferService'],
+        },
         {
           provide: 'IdempotencyService',
           useValue: mockIdempotencyService,

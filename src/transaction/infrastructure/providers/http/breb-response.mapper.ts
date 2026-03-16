@@ -1,4 +1,5 @@
 import type { ExternalTransferResult } from '../../../domain/providers/external-transfer.service';
+import { TransactionStatus } from '../../../domain/transaction-status.enum';
 
 interface BrebResponseData {
   end_to_end_id?: string;
@@ -14,6 +15,15 @@ interface BrebResponseData {
   qrCodeId?: string;
 }
 
+/** Maps external API status string to domain TransactionStatus. */
+function mapStatusToTransactionStatus(raw: string | undefined): TransactionStatus {
+  if (!raw) return TransactionStatus.CREATED;
+  const upper = raw.toUpperCase();
+  if (upper === 'SUCCESS' || upper === 'COMPLETED') return TransactionStatus.SUCCESS;
+  if (upper === 'FAILED' || upper === 'ERROR' || upper === 'REJECTED') return TransactionStatus.FAILED;
+  return TransactionStatus.CREATED;
+}
+
 export function mapBrebResponseToTransferResult(
   data: unknown,
 ): ExternalTransferResult {
@@ -23,13 +33,13 @@ export function mapBrebResponseToTransferResult(
 
   const body = data as BrebResponseData;
   const end_to_end_id = body.end_to_end_id ?? body.endToEndId;
-  const status = body.status;
+  const rawStatus = body.status;
   const properties = body.properties ?? {};
   const trace_id = properties.trace_id ?? properties.traceId;
   const event_date = properties.event_date ?? properties.eventDate;
   const qr_code_id = body.qr_code_id ?? body.qrCodeId;
 
-  if (!end_to_end_id || !status || !trace_id) {
+  if (!end_to_end_id || !rawStatus || !trace_id) {
     throw new Error(
       'Invalid response structure from external service (expected end_to_end_id, status, properties.trace_id)',
     );
@@ -37,7 +47,7 @@ export function mapBrebResponseToTransferResult(
 
   return {
     externalId: end_to_end_id,
-    status,
+    status: mapStatusToTransactionStatus(rawStatus),
     traceId: trace_id,
     qrCodeId: qr_code_id,
     eventDate: event_date,

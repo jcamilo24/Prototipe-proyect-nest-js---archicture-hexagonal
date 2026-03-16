@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
+import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 
 @Schema({ collection: 'transactions', timestamps: true })
 export class TransactionDocument extends Document {
@@ -30,8 +31,11 @@ export class TransactionDocument extends Document {
   @Prop({ default: 'AHORROS' })
   receiverAccountType: string;
 
-  @Prop({ required: true })
-  status: string;
+  @Prop({ required: true, type: String, enum: Object.values(TransactionStatus) })
+  status: TransactionStatus;
+
+  @Prop({ required: false })
+  finalizedAt?: Date;
 
   @Prop({ required: true, default: () => new Date() })
   transactionDate: Date;

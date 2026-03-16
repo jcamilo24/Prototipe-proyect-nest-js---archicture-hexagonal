@@ -1,4 +1,4 @@
-export interface IdempotencyService {
+export type IdempotencyService = {
   handle<T>(
     key: string,
     requestHash: string,

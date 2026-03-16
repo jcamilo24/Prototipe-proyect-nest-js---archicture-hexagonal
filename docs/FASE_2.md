@@ -31,7 +31,7 @@ Este documento describe cada cambio realizado para la Fase 2 del proyecto.
 | Módulo | `transaction.module.ts` | Registra `RedisProvider` y `RedisIdempotencyService`. |
 | App | `app.module.ts` | Usa `ConfigModule` y `MONGO_URI`; Mongo por variable de entorno. |
 
-#### 4. Ajuste para respetar mejor el patrón hexagonal
+#### 4. Ajuste para respetar el patrón hexagonal
 
 **Nuevo puerto:** `src/transaction/domain/providers/idempotency.service.ts`
 
@@ -53,9 +53,10 @@ Lo que no conviene es que el controller conozca esa implementación concreta; po
 
 ### Configuración de Mongo (no localhost en producción)
 
-- **Dónde:** `src/config/mongo.config.ts` — función `getMongoUri(ConfigService)`.
+- **Dónde:** `src/config/mongo/mongo.config.ts` — función `getMongoUri(ConfigService)`.
 - **Comportamiento:** En desarrollo usa `MONGO_URI` o default `mongodb://localhost:27017/practice-project`. En **producción** (`NODE_ENV=production`) exige `MONGO_URI`; si falta o está vacío, lanza error al arrancar (no se usa localhost por defecto).
 - **App:** `app.module.ts` usa `MongooseModule.forRootAsync` inyectando `ConfigService` y llamando a `getMongoUri(configService)`.
+- **Secrets:** `MONGO_URI` es una variable sensible cuando incluye credenciales. Ver `docs/SECRETS.md`.
 
 ---
 
@@ -180,6 +181,170 @@ Eso es resiliencia.
 **Opinion:**  Porque el adapter es el responsable de la integración externa.
 El dominio y los casos de uso no deben conocer detalles
 de resiliencia de infraestructura.
+
+---
+
+## Circuit breaker con Opossum (sustituye retry manual / p-retry)
+
+Se quitó la lógica de reintentos con backoff (manual y la prueba con p-retry) y se pasó a **circuit breaker** usando la librería **Opossum**.
+
+### Qué se hizo
+
+- **Librería:** `opossum` en dependencias. Opossum es un circuit breaker para Node: abre el circuito cuando hay muchos fallos, deja de llamar al proveedor un tiempo, y luego prueba de nuevo (semiabierto).
+- **Servicio BREB (`breb.service.ts`):**  
+  - La llamada real a BREB está en un método privado `callBreb(transaction)`.  
+  - Ese método se envuelve en un circuit breaker creado en el constructor.  
+  - `sendTransfer(transaction)` solo hace `this.breaker.fire(transaction)`; si el breaker rechaza (circuito abierto o error), se captura y se pasa a `throwHttpClientError(err)`.
+- **Factory del breaker (`breb-circuit-breaker.factory.ts`):**  
+  - Toda la configuración del breaker (opossum, opciones, eventos) está en una factory en la misma capa HTTP.  
+  - Opciones: `timeout` 5 s, `errorThresholdPercentage` 50, `resetTimeout` 10 s, `volumeThreshold` 5 (mínimo 5 llamadas antes de poder abrir).  
+  - Eventos `open`, `halfOpen`, `close` se registran ahí y se loguean.  
+  - El servicio BREB solo llama a `createBrebCircuitBreaker(this.callBreb.bind(this), this.logger)` y guarda la instancia.
+
+### Por qué circuit breaker y no solo retry
+
+- **Retry (p-retry o manual):** Reintenta la misma petición varias veces; no “recuerda” que el servicio lleva fallando. Con el servicio caído, cada request hace varios intentos y todo sigue fallando.
+- **Circuit breaker:** Tras varios fallos (según umbral y volumen), **deja de llamar** al proveedor un tiempo (circuito abierto). Las peticiones fallan rápido (sin llamar a BREB). Tras `resetTimeout`, se pasa a semiabierto, se prueba una llamada y, si va bien, se cierra otra vez. Así se evita saturar un servicio caído y se responde antes al cliente cuando BREB no está disponible.
+
+---
+
+### Requerimiento 3: Comunicación entre servicios usando HTTP/2
+
+**Contexto:** En Fase 1 la comunicación entre API Core y API BREB (mock/adapter) es HTTP/1 con REST. En Fase 2 el objetivo es que el **transporte** sea HTTP/2; el contrato REST (URLs, métodos, cuerpos) puede seguir igual.
+
+**Objetivo:** Cambiar la comunicación entre las dos APIs para usar HTTP/2 en lugar de HTTP/1.
+
+**Qué debe quedar implementado:**
+
+1. Levantar el servidor NestJS con soporte HTTP/2 (que los clientes que llamen a Core puedan usar HTTP/2).
+2. El adapter que llama a BREB debe usar un **cliente HTTP/2** (no axios/HTTP/1).
+3. La comunicación entre servicios debe funcionar efectivamente sobre HTTP/2.
+4. Documentar qué se cambió y por qué (este mismo doc).
+
+**Conceptos que debes considerar:**
+
+- **Connection multiplexing (multiplexado):** En HTTP/2 una sola conexión TCP puede llevar **varios requests/responses a la vez** (streams). No hace falta una conexión por request.
+- **Connection reuse (reutilización):** Reutilizar **una misma conexión** (o “sesión” HTTP/2) para muchos requests al mismo host (BREB), en lugar de abrir una conexión nueva por cada request. Eso reduce latencia y uso de recursos.
+
+---
+
+### Fastify vs node:http2 — por qué se usan los dos
+
+En el proyecto hay **dos papeles** de HTTP/2; por eso aparecen Fastify y el módulo nativo `node:http2`:
+
+| Quién | Papel | Qué se usa | Para qué |
+|-------|--------|------------|----------|
+| **API Core (servidor)** | Recibe peticiones | **Fastify** (adaptador en Nest) | Que la app escuche en HTTP/2 (p. ej. curl → Core). |
+| **API Core (cliente)** | Hace peticiones a BREB | **node:http2** | Que Core llame a BREB en HTTP/2 (Core → BREB). |
+
+- **Fastify** es un framework para **crear servidores**. Se usa en `main.ts` con `FastifyAdapter({ http2: true })` para que Nest levante un **servidor** HTTP/2. No sirve para hacer peticiones salientes.
+- Para **peticiones salientes** (cliente) en HTTP/2 desde Node se usa el módulo nativo **`node:http2`**. Por eso el adapter que llama a BREB está implementado con ese módulo.
+
+---
+
+### Elección: Fastify
+
+Para el servidor Nest (API Core) se usará **Fastify** con HTTP/2.
+
+**HTTP/2 sin TLS (desarrollo)**
+
+Con solo `http2: true`, Fastify puede levantar HTTP/2 en **cleartext** (h2c), válido para desarrollo y para clientes que soporten h2c (p. ej. otro servicio Node). No hace falta certificado.
+
+El servidor está en **HTTP/2**; **Postman** no maneja bien HTTP/2 (sobre todo en cleartext/h2c) y puede mostrar “Parse Error: malformed response”. Para probar la API en HTTP/2 se usa el curl:
+**Ejemplo con curl (POST al transfer):**  
+El servidor Fastify usa HTTP/2 directo (prior knowledge); curl debe usar `--http2-prior-knowledge` para no hacer Upgrade y evitar el error "Received HTTP/0.9 when not allowed".
+```bash
+curl -v --http2-prior-knowledge -X POST http://localhost:3000/transactions/transfer \
+  -H "Idempotency-Key: test-1" \
+  -H "Content-Type: application/json" \
+  -d '{"transaction":{"id":"tx-004","amount":111000,"currency":"USD","description":"Test","receiver":{"document":"3006985758","documentType":"CC","name":"MI EMPRESA","account":"323232","accountType":"Ahorros"}}}'
+```
+
+#### Archivo: `breb-http2.client.ts`
+
+**Ubicación:** `src/transaction/infrastructure/providers/http/breb-http2.client.ts`
+
+**Propósito:** Encapsular la comunicación HTTP/2 con BREB en un solo lugar: una sesión reutilizada, POST con body JSON y cierre ordenado al apagar el módulo.
+
+| Parte | Qué hace |
+|-------|----------|
+| **Token / interfaz** | `BREB_HTTP2_CLIENT` es el token de inyección. La interfaz `BrebHttp2Client` expone solo `postJson(body): Promise<unknown>`. |
+| **URL** | La base URL se toma de `process.env.BREB_BASE_URL` (por defecto `http://localhost:3001/transfer`). Se usa `URL` para obtener host, puerto, path y scheme. |
+| **Cierre** | La clase implementa `OnModuleDestroy`. En `onModuleDestroy()` se cierra la sesión con `session.close()` y se pone la referencia a `null`, de forma que al apagar la app no queden conexiones abiertas. |
+
+## Reuse (reutilización): 
+En breb-http2.client.ts, getSession() devuelve siempre la misma ClientHttp2Session si existe y no está cerrada; solo se crea una nueva con http2.connect(origin) la primera vez. Todas las llamadas a postJson (y por tanto todos los sendTransfer) usan esa misma sesión → una sola conexión TCP reutilizada.
+
+## Multiplexing: 
+En HTTP/2 cada request usa un stream distinto sobre la misma sesión. En nuestro cliente, cada postJson hace un session.request() (un stream nuevo). Si se hacen varias llamadas concurrentes a BREB, todas usan la misma sesión y streams distintos → multiplexing “de fábrica” con la implementación actual.
+
+**Flujo en una llamada:**  
+Adapter llama a `brebClient.postJson(body)` → el cliente obtiene o crea la sesión → abre un *stream* sobre esa sesión (POST al path de la URL) → escribe el body → lee la respuesta → devuelve el JSON parseado (o lanza si status ≥ 400 o JSON inválido). Varias llamadas usan la **misma sesión** (connection reuse) y, en HTTP/2, pueden usar streams distintos en paralelo (multiplexing).
+
+**Quién lo usa:**  
+`BrebAdapter` recibe por inyección `BrebHttp2Client`; en el módulo se provee `BrebHttp2ClientImpl`. En tests se puede inyectar un mock que implemente `postJson` para no depender de un servidor real.
+
+---
+
+curl -v --http2-prior-knowledge -X POST http://localhost:3000/transactions/transfer \
+  -H "Idempotency-Key: test-2" \
+  -H "Content-Type: application/json" \
+  -d '{"transaction":{"id":"tx-005","amount":111000,"currency":"USD","description":"Test","receiver":{"document":"3006985758","documentType":"CC","name":"MI EMPRESA","account":"323232","accountType":"Ahorros"}}}'
+
+---
+
+## Entidad de transacción con lógica de dominio
+
+**Contexto:** Una entidad que solo tiene datos y sin métodos que encapsulen reglas de negocio se considera un “modelo anémico”. Toda la lógica queda en servicios o casos de uso y la entidad no protege sus invariantes.
+
+**Objetivo:** Que la entidad `Transaction` encapsule su estado y solo permita transiciones válidas (de PENDING a SUCCESS o FAILED), centralizando la lógica en el dominio.
+
+### Cambios realizados
+
+| Archivo | Qué se hizo |
+|---------|--------------|
+| **`transaction.entity.ts`** | La entidad deja de ser un “data bag”: el `status` pasa a ser interno (`_status`) y solo se expone por getter. Se añade `finalizedAt` (fecha de cierre). **Método nuevo:** `applyExternalResult(resultStatus: TransactionStatus)`: valida que el estado actual sea `PENDING`, que el resultado sea `SUCCESS` o `FAILED`, actualiza `_status` y asigna `_finalizedAt = new Date()`. Es la única forma de pasar de PENDING a un estado final. |
+| **`create-transfer.use-case.ts`** | En lugar de `transaction.status = externalResponse.status`, se llama a `transaction.applyExternalResult(externalResponse.status)`. El caso de uso ya no modifica el estado de la transacción directamente. |
+| **`transaction.schema.ts`** | Se añade el campo opcional `finalizedAt` para persistir la fecha de finalización. |
+| **`transaction.repository.ts`** | El payload de guardado incluye `finalizedAt` cuando existe. |
+
+### Invariantes que protege la entidad
+
+- Solo se puede “finalizar” una transacción que está en **CREATED**.
+- El estado final solo puede ser **SUCCESS** o **FAILED** (no se acepta otro valor).
+- Si se intenta llamar `applyExternalResult` dos veces o con estado distinto de PENDING, la entidad lanza error y evita estados inconsistentes.
+
+### Impacto en el proyecto
+
+- **Controller y mappers:** Sin cambios; siguen leyendo `transaction.status` (getter) y construyendo la respuesta.
+- **Adaptadores (BREB, Redis):** Sin cambios; no dependen del estado interno de la entidad.
+- **Tests:** Siguen pasando; los mocks devuelven `TransactionStatus.SUCCESS` y el caso de uso llama `applyExternalResult` con ese valor.
+
+Con esto, la entidad concentra la lógica de transición de estado y el resto del proyecto interactúa con ella a través de su API (`applyExternalResult` y getters).
+
+---
+
+## Uso del enum `TransactionStatus`
+
+Este enum es la única fuente de verdad para los estados de una transacción en el dominio. Se usa en todo el flujo para evitar strings sueltos y tener tipado fuerte.
+
+### Dónde se usa
+
+| Lugar | Uso |
+|-------|-----|
+| **Entidad `Transaction`** | El estado interno `_status` y el getter `status` son de tipo `TransactionStatus`. El método `applyExternalResult` recibe y valida `TransactionStatus`. |
+| **Request mapper** | Al crear la entidad desde el request se usa `TransactionStatus.PENDING` como estado inicial. |
+| **Contrato externo `ExternalTransferResult`** | El campo `status` es `TransactionStatus`; el adaptador BREB devuelve ese tipo. |
+| **Respuesta API `CreateTransferResponse`** | El campo `status` es `TransactionStatus`; en JSON se serializa como string (`"PENDING"`, `"SUCCESS"`, `"FAILED"`). |
+| **Mapper de BREB `breb-response.mapper.ts`** | La respuesta del proveedor viene como string (p. ej. `"SUCCESS"`, `"COMPLETED"`). La función `mapStatusToTransactionStatus` normaliza: `SUCCESS`/`COMPLETED` → `TransactionStatus.SUCCESS`, `FAILED`/`ERROR`/`REJECTED` → `TransactionStatus.FAILED`, otro → `TransactionStatus.PENDING`. Así el dominio solo trabaja con el enum. |
+| **Schema Mongoose `transaction.schema.ts`** | El campo `status` tiene `enum: Object.values(TransactionStatus)` y `type: String`, de modo que en base de datos solo se persisten valores válidos del enum. |
+| **Registro de idempotencia `idempotency-record.ts`** | El campo `status` del registro es `TransactionStatus` y al crear un registro se usa `TransactionStatus.SUCCESS` (operación completada con éxito). |
+
+### Resumen
+
+- **Dominio:** Entidad, puertos y DTOs usan `TransactionStatus`.
+- **Infraestructura:** El mapper de BREB traduce strings del proveedor al enum; el schema de Mongo restringe los valores al enum.
+- **Consistencia:** No se usan strings literales para estados de transacción; todo pasa por el enum.
 
 ---
 

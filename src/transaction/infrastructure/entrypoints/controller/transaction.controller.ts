@@ -4,6 +4,7 @@ import {
   Controller,
   Headers,
   Inject,
+  Logger,
   Post,
 } from '@nestjs/common';
 import { CreateTransferUseCase } from '../../../application/use-cases/create-transfer.use-case';
@@ -14,10 +15,12 @@ import {
   mapRequestToEntity,
   mapResultToResponse,
 } from './transaction-request.mapper';
-import { generateRequestHash } from 'src/common/helpers/hash.helper';
+import { generateRequestHash } from 'src/common/utils/hash.util';
 
 @Controller('transactions')
 export class TransactionController {
+  private readonly logger = new Logger(TransactionController.name);
+
   constructor(
     private readonly createTransferUseCase: CreateTransferUseCase,
     @Inject('IdempotencyService')
@@ -29,12 +32,17 @@ export class TransactionController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Body() body: CreateTransferRequest,
   ): Promise<CreateTransferResponse> {
+    const transactionId = body?.transaction?.id;
+    this.logger.log(
+      `Request received | idempotencyKey=${idempotencyKey} transactionId=${transactionId}`,
+    );
+
     if (!idempotencyKey) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
 
     const requestHash = generateRequestHash(body);
-    return this.idempotencyService.handle<CreateTransferResponse>(
+    const response = await this.idempotencyService.handle<CreateTransferResponse>(
       idempotencyKey,
       requestHash,
       async () => {
@@ -43,5 +51,10 @@ export class TransactionController {
         return mapResultToResponse(result);
       },
     );
+
+    this.logger.log(
+      `Response ready | transactionId=${response?.id} status=${response?.status}`,
+    );
+    return response;
   }
 }

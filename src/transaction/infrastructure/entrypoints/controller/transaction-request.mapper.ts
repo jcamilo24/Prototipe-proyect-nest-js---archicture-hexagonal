@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
+import type { ExternalTransferResult } from 'src/transaction/domain/providers/external-transfer.service';
 import { CreateTransferRequest } from '../model/create-transfer.request';
 import { CreateTransferResponse } from '../model/create-transfer.response';
 
@@ -25,19 +26,13 @@ export function mapRequestToEntity(
     name,
     account,
     accountType,
-    TransactionStatus.PENDING,
+    TransactionStatus.CREATED,
   );
 }
 
 export function mapResultToResponse(result: {
   transaction: Transaction;
-  externalResponse: {
-    externalId: string;
-    status: string;
-    traceId: string;
-    qrCodeId?: string;
-    eventDate?: string;
-  };
+  externalResponse: ExternalTransferResult;
 }): CreateTransferResponse {
   const { transaction, externalResponse } = result;
   return {

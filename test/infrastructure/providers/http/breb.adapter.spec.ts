@@ -1,13 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { HttpService } from '@nestjs/axios';
-import { of, throwError } from 'rxjs';
-import type { AxiosResponse } from 'axios';
-import { BrebAdapter } from '../../../../src/transaction/infrastructure/providers/http/breb.adapter';
+import { ConfigService } from '@nestjs/config';
+import { BrebAdapter } from '../../../../src/transaction/infrastructure/providers/http/breb.service';
+import { BREB_HTTP2_CLIENT } from '../../../../src/transaction/infrastructure/providers/http/breb-http2.client';
 import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
 
 describe('BrebAdapter', () => {
   let adapter: BrebAdapter;
-  let httpService: { post: jest.Mock };
+  let brebClient: { postJson: jest.Mock };
 
   const mockTransaction = new Transaction(
     'tx-001',
@@ -22,27 +21,37 @@ describe('BrebAdapter', () => {
     'PENDING',
   );
 
-  const validBrebResponse: AxiosResponse = {
-    data: {
-      end_to_end_id: 'e2e-123',
-      qr_code_id: 'qr-456',
-      status: 'SUCCESS',
-      properties: {
-        event_date: '2025-02-27T12:00:00Z',
-        trace_id: 'trace-789',
-      },
+  const validBrebData = {
+    end_to_end_id: 'e2e-123',
+    qr_code_id: 'qr-456',
+    status: 'SUCCESS',
+    properties: {
+      event_date: '2025-02-27T12:00:00Z',
+      trace_id: 'trace-789',
     },
-    status: 200,
-    statusText: 'OK',
-    headers: {},
-    config: {} as AxiosResponse['config'],
   };
 
   beforeEach(async () => {
-    httpService = { post: jest.fn().mockReturnValue(of(validBrebResponse)) };
+    brebClient = { postJson: jest.fn().mockResolvedValue(validBrebData) };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [BrebAdapter, { provide: HttpService, useValue: httpService }],
+      providers: [
+        BrebAdapter,
+        { provide: BREB_HTTP2_CLIENT, useValue: brebClient },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) =>
+              ({
+                BREB_CIRCUIT_TIMEOUT_MS: '15000',
+                BREB_CIRCUIT_ERROR_THRESHOLD_PERCENT: '65',
+                BREB_CIRCUIT_RESET_TIMEOUT_MS: '30000',
+                BREB_CIRCUIT_VOLUME_THRESHOLD: '10',
+              }[key]),
+            ),
+          },
+        },
+      ],
     }).compile();
 
     adapter = module.get<BrebAdapter>(BrebAdapter);
@@ -55,13 +64,10 @@ describe('BrebAdapter', () => {
   it('should send transfer with transaction in English format and return mapped result', async () => {
     const result = await adapter.sendTransfer(mockTransaction);
 
-    expect(httpService.post).toHaveBeenCalledTimes(1);
-    const firstCall = httpService.post.mock.calls[0] as [
-      string,
+    expect(brebClient.postJson).toHaveBeenCalledTimes(1);
+    const [body] = brebClient.postJson.mock.calls[0] as [
       Record<string, unknown>,
     ];
-    const [url, body] = firstCall;
-    expect(url).toBeDefined();
     expect(body).toEqual({
       transaction: {
         id: 'tx-001',
@@ -88,17 +94,13 @@ describe('BrebAdapter', () => {
   });
 
   it('should throw when external service returns invalid structure', async () => {
-    httpService.post.mockReturnValue(
-      of({ data: { status: 'SUCCESS' }, status: 200 }),
-    );
+    brebClient.postJson.mockResolvedValue({ status: 'SUCCESS' });
 
     await expect(adapter.sendTransfer(mockTransaction)).rejects.toThrow();
   });
 
   it('should throw when HTTP request fails', async () => {
-    httpService.post.mockReturnValue(
-      throwError(() => new Error('Network error')),
-    );
+    brebClient.postJson.mockRejectedValue(new Error('Network error'));
 
     await expect(adapter.sendTransfer(mockTransaction)).rejects.toThrow();
   });

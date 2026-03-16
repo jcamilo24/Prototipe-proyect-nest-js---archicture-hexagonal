@@ -1,11 +1,12 @@
 import { randomUUID } from 'crypto';
+import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 
-export interface IdempotencyRecord<T> {
+export type IdempotencyRecord<T> = {
   id: string;
   idempotency_key: string;
   request_hash: string;
   response: T;
-  status: string;
+  status: TransactionStatus;
   created_at: string;
 }
 
@@ -19,7 +20,7 @@ export function createIdempotencyRecord<T>(
     idempotency_key: key,
     request_hash: requestHash,
     response,
-    status: 'COMPLETED',
+    status: TransactionStatus.SUCCESS,
     created_at: new Date().toISOString(),
   };
 }

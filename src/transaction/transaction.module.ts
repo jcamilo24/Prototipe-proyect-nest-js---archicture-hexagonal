@@ -1,20 +1,22 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
 import { MongooseModule } from '@nestjs/mongoose';
 import { TransactionController } from './infrastructure/entrypoints/controller/transaction.controller';
 import { CreateTransferUseCase } from './application/use-cases/create-transfer.use-case';
-import { BrebAdapter } from './infrastructure/providers/http/breb.adapter';
+import { BrebAdapter } from './infrastructure/providers/http/breb.service';
+import {
+  BREB_HTTP2_CLIENT,
+  BrebHttp2ClientImpl,
+} from './infrastructure/providers/http/breb-http2.client';
 import { TransactionRepositoryImpl } from './infrastructure/providers/persistence/transaction.repository';
 import {
   TransactionDocument,
   TransactionSchema,
 } from './infrastructure/providers/persistence/transaction.schema';
-import { RedisProvider } from 'src/common/redis/redis.provider';
+import { RedisProvider } from 'src/config/redis/redis.provider';
 import { RedisIdempotencyService } from './infrastructure/idempotency/redis-idempotency.service';
 
 @Module({
   imports: [
-    HttpModule,
     MongooseModule.forFeature([
       { name: TransactionDocument.name, schema: TransactionSchema },
     ]),
@@ -45,6 +47,10 @@ import { RedisIdempotencyService } from './infrastructure/idempotency/redis-idem
     {
       provide: 'ExternalTransferService',
       useClass: BrebAdapter,
+    },
+    {
+      provide: BREB_HTTP2_CLIENT,
+      useClass: BrebHttp2ClientImpl,
     },
   ],
 })

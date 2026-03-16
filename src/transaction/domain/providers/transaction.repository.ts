@@ -1,5 +1,5 @@
 import { Transaction } from '../entity/transaction.entity';
 
-export interface TransactionRepository {
+export type TransactionRepository = {
   save(tx: Transaction): Promise<void>;
 }

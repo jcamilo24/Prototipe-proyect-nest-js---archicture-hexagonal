@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { getMongoUri } from './config/mongo.config';
+import { getMongoUri } from './config/mongo/mongo.config';
 import { TransactionModule } from './transaction/transaction.module';
 
 @Module({

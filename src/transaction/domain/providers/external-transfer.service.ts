@@ -1,12 +1,13 @@
 import { Transaction } from '../entity/transaction.entity';
+import { TransactionStatus } from '../transaction-status.enum';
 
-export interface ExternalTransferService {
+export type ExternalTransferService = {
   sendTransfer(transaction: Transaction): Promise<ExternalTransferResult>;
 }
 
-export interface ExternalTransferResult {
+export type ExternalTransferResult = {
   externalId: string;
-  status: string;
+  status: TransactionStatus;
   traceId: string;
   qrCodeId?: string;
   eventDate?: string;

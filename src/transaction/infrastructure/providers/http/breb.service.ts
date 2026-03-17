@@ -41,6 +41,19 @@ export class BrebAdapter implements ExternalTransferService {
     }
   }
 
+  async getTransferById(id: string): Promise<unknown> {
+    try {
+      this.logger.log(`getTransferById started | id=${id}`);
+      const data = await this.brebClient.getJson(id);
+      this.logger.log(`getTransferById ok | id=${id}`);
+      return data;
+    } catch (err) {
+      this.logger.error(`Error calling BREB GET | id=${id} error=${err}`);
+      throwHttpClientError(err);
+      throw err;
+    }
+  }
+
   private async callBreb(
     transaction: Transaction,
   ): Promise<ExternalTransferResult> {

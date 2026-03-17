@@ -17,8 +17,10 @@ export class Transaction {
     public readonly receiverAccountType: string,
     status: TransactionStatus,
     public readonly transactionDate: Date = new Date(),
+    finalizedAt?: Date | null,
   ) {
     this._status = status;
+    this._finalizedAt = finalizedAt ?? null;
   }
 
   get status(): TransactionStatus {

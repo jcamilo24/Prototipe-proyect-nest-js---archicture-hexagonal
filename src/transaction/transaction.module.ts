@@ -14,6 +14,8 @@ import {
 } from './infrastructure/providers/persistence/transaction.schema';
 import { RedisProvider } from 'src/config/redis/redis.provider';
 import { RedisIdempotencyService } from './infrastructure/idempotency/redis-idempotency.service';
+import { GetTransferByIdUseCase } from './application/use-cases/get-transfer-by-id.use-case';
+import { TransactionRepository } from './domain/providers/transaction.repository';
 
 @Module({
   imports: [
@@ -39,6 +41,12 @@ import { RedisIdempotencyService } from './infrastructure/idempotency/redis-idem
           externalTransferService,
         ),
       inject: ['TransactionRepository', 'ExternalTransferService'],
+    },
+    {
+      provide: GetTransferByIdUseCase,
+      useFactory: (transactionRepository: TransactionRepositoryImpl) =>
+        new GetTransferByIdUseCase(transactionRepository),
+      inject: ['TransactionRepository'],
     },
     {
       provide: 'TransactionRepository',

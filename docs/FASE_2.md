@@ -348,3 +348,31 @@ Este enum es la única fuente de verdad para los estados de una transacción en 
 
 ---
 
+### Requerimiento 4: Persistencia real de transferencias
+
+1. **Enum y validador** – Actualizar estados y validación de finalización.
+2. **Puerto del repositorio** – Añadir `findById`.
+3. **Implementación del repositorio** – Implementar `findById` y mapper documento → entidad.
+4. **Use case GET** – Crear GetTransferByIdUseCase.
+5. **DTO y mapper** – GetTransferResponse y función entidad → DTO.
+6. **Controller** – GET /transfer/:id y manejo 404/200.
+7. **Módulo** – Registrar use case e inyección en el controller.
+8. **BREB mapper e idempotency** – Cambiar SUCCESS → CONFIRMED donde quieras unificar.
+
+**Objetivo:** Guardar transferencias con estados (CREATED, SENT, CONFIRMED, FAILED, REVERSED) y exponer GET /transactions/transfer/:id para consultar estado. Se evalúa modelado de dominio, manejo de estados y consistencia.
+
+**Estados de dominio:** Enum `TransactionStatus` ampliado con SENT, CONFIRMED, REVERSED (se mantiene SUCCESS para compatibilidad con BREB). Validador `validateFinalization`: solo CREATED puede finalizarse; resultados permitidos CONFIRMED, FAILED, REVERSED, SUCCESS.
+
+**Qué se hizo (resumen):**
+
+| Capa | Cambio |
+|------|--------|
+| **Dominio** | Enum con CREATED, SENT, SUCCESS, CONFIRMED, FAILED, REVERSED. Validador actualizado. Puerto `TransactionRepository` con `findById(id): Promise<Transaction \| null>`. Entidad `Transaction`: constructor acepta `finalizedAt` opcional para cargar desde BD. |
+| **Aplicación** | `GetTransferByIdUseCase`: llama a `findById`; si null lanza NotFoundException, si no devuelve la entidad. |
+| **Infraestructura** | `TransactionRepositoryImpl.findById`: busca por id, usa `TransactionMapper.toDomain(doc)` (incluye `finalizedAt`). `TransactionMapper.toDomain` pasa `doc.finalizedAt` al constructor. BREB mapper: SUCCESS/COMPLETED → CONFIRMED. Idempotency: registro con status CONFIRMED. Schema: mismo enum, acepta todos los estados. |
+| **Entrypoints** | DTO `GetTransferResponse` (id, status, amount, currency, description, receiver, transactionDate, finalizedAt?). Mapper `mapTransactionToGetResponse`: entidad → DTO; `finalizedAt` solo cuando existe (undefined si no finalizada). Controller: GET /transfer/:id inyecta use case, devuelve 200 con DTO o 404 vía excepción. |
+| **Módulo** | `GetTransferByIdUseCase` registrado como provider (inyecta TransactionRepository); controller inyecta el use case. |
+
+**Consistencia:** Flujo POST sigue CREATED → applyExternalResult(CONFIRMED|FAILED) → save. GET devuelve el estado persistido; `finalizedAt` se carga desde BD cuando la entidad se reconstruye con `toDomain(doc)`.
+
+---

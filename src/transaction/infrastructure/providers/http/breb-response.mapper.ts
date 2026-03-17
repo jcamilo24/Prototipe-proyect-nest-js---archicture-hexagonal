@@ -18,9 +18,17 @@ interface BrebResponseData {
 /** Maps external API status string to domain TransactionStatus. */
 function mapStatusToTransactionStatus(raw: string | undefined): TransactionStatus {
   if (!raw) return TransactionStatus.CREATED;
+
   const upper = raw.toUpperCase();
-  if (upper === 'SUCCESS' || upper === 'COMPLETED') return TransactionStatus.SUCCESS;
-  if (upper === 'FAILED' || upper === 'ERROR' || upper === 'REJECTED') return TransactionStatus.FAILED;
+
+  if (upper === 'SUCCESS' || upper === 'COMPLETED') {
+    return TransactionStatus.CONFIRMED;
+  }
+
+  if (upper === 'FAILED' || upper === 'ERROR' || upper === 'REJECTED') {
+    return TransactionStatus.FAILED;
+  }
+
   return TransactionStatus.CREATED;
 }
 

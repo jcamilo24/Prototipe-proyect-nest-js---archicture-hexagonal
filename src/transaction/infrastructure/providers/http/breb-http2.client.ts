@@ -4,8 +4,19 @@ import * as http2 from 'node:http2';
 export const BREB_HTTP2_CLIENT = 'BrebHttp2Client';
 
 export interface BrebHttp2Client {
+  /** POST con body JSON al baseUrl (ej. crear transferencia). */
   postJson(body: Record<string, unknown>): Promise<unknown>;
+  /** GET a baseUrl + path (ej. consultar por id). Path es el segmento tras la base (ej. "123" → GET /transfer/123). */
+  getJson(path: string): Promise<unknown>;
 }
+
+type RequestOptions = {
+  method: 'GET' | 'POST';
+  path: string;
+  authority: string;
+  scheme: 'http' | 'https';
+  body?: string;
+};
 
 @Injectable()
 export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
@@ -19,27 +30,75 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
     this.logger.log(
       `POST ${this.baseUrl} | transactionId=${transactionId ?? '-'}`,
     );
+    const { path, authority, scheme } = this.getRequestTarget();
+    return this.request(
+      {
+        method: 'POST',
+        path,
+        authority,
+        scheme,
+        body: JSON.stringify(requestBody),
+      },
+      `transactionId=${transactionId ?? '-'}`,
+    );
+  }
 
+  async getJson(subPath: string): Promise<unknown> {
+    const path = this.buildPath(subPath);
+    this.logger.log(`GET ${this.baseUrl}${path} | path=${subPath}`);
+    const { authority, scheme } = this.getRequestTarget();
+    return this.request(
+      { method: 'GET', path, authority, scheme },
+      `path=${subPath}`,
+    );
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.closeSession();
+  }
+
+  private getRequestTarget(): {
+    path: string;
+    authority: string;
+    scheme: 'http' | 'https';
+  } {
     const url = new URL(this.baseUrl);
     const path = url.pathname || '/';
     const authority = `${url.hostname}:${url.port || (url.protocol === 'https:' ? 443 : 80)}`;
     const scheme = url.protocol.replace(':', '') as 'http' | 'https';
+    return { path, authority, scheme };
+  }
 
+  /** Construye el path para GET: base path + segmento (ej. "/transfer" + "123" → "/transfer/123"). */
+  private buildPath(subPath: string): string {
+    const url = new URL(this.baseUrl);
+    const basePath = url.pathname?.replace(/\/$/, '') || '/';
+    const segment = subPath.replace(/^\//, '') || '';
+    return segment ? `${basePath}/${segment}` : basePath;
+  }
+
+  private request(
+    options: RequestOptions,
+    logContext: string,
+  ): Promise<unknown> {
+    const { method, path, authority, scheme, body } = options;
     const session = this.getSession();
-    const bodyStr = JSON.stringify(requestBody);
 
     return new Promise((resolve, reject) => {
-      const req = session.request(
-        {
-          ':method': 'POST',
-          ':path': path,
-          ':scheme': scheme,
-          ':authority': authority,
-          'content-type': 'application/json',
-          'content-length': Buffer.byteLength(bodyStr, 'utf8').toString(),
-        },
-        { endStream: false },
-      );
+      const headers: Record<string, string> = {
+        ':method': method,
+        ':path': path,
+        ':scheme': scheme,
+        ':authority': authority,
+      };
+      if (body) {
+        headers['content-type'] = 'application/json';
+        headers['content-length'] = Buffer.byteLength(body, 'utf8').toString();
+      }
+
+      const req = session.request(headers, {
+        endStream: !body,
+      });
 
       let statusCode: number | undefined;
       const chunks: Buffer[] = [];
@@ -59,9 +118,10 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
           reject(new Error('Invalid JSON response from BREB'));
           return;
         }
-        if (statusCode != null && statusCode >= 400) {
+        const isErrorStatus = statusCode != null && statusCode >= 400;
+        if (isErrorStatus) {
           this.logger.warn(
-            `BREB HTTP error | transactionId=${transactionId ?? '-'} status=${statusCode}`,
+            `BREB HTTP error | ${logContext} status=${statusCode}`,
           );
           const err = new Error(`BREB returned ${statusCode}`) as Error & {
             response?: { status?: number };
@@ -71,19 +131,17 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
           return;
         }
         this.logger.log(
-          `BREB HTTP response | transactionId=${transactionId ?? '-'} status=${statusCode ?? '-'}`,
+          `BREB HTTP response | ${logContext} status=${statusCode ?? '-'}`,
         );
         resolve(data);
       });
 
       req.on('error', reject);
-      req.write(bodyStr, 'utf8');
+      if (body) {
+        req.write(body, 'utf8');
+      }
       req.end();
     });
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    await this.closeSession();
   }
 
   private getSession(): http2.ClientHttp2Session {
@@ -101,16 +159,14 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
 
   private async closeSession(): Promise<void> {
     if (this.session == null) return;
+    const session = this.session;
+    this.session = null;
     return new Promise((resolve) => {
-      if (this.session!.closed) {
-        this.session = null;
+      if (session.closed) {
         resolve();
         return;
       }
-      this.session!.close(() => {
-        this.session = null;
-        resolve();
-      });
+      session.close(() => resolve());
     });
   }
 }

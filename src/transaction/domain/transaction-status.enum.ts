@@ -1,5 +1,8 @@
 export enum TransactionStatus {
   CREATED = 'CREATED',
-  SUCCESS = 'SUCCESS',
+  SENT = 'SENT',
+  SUCCESS = 'SUCCESS', 
+  CONFIRMED = 'CONFIRMED',
   FAILED = 'FAILED',
+  REVERSED = 'REVERSED',
 }

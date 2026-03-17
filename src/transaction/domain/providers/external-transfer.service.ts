@@ -3,6 +3,7 @@ import { TransactionStatus } from '../transaction-status.enum';
 
 export type ExternalTransferService = {
   sendTransfer(transaction: Transaction): Promise<ExternalTransferResult>;
+  getTransferById(id: string): Promise<unknown>;
 }
 
 export type ExternalTransferResult = {

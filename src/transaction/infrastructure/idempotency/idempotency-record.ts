@@ -20,7 +20,7 @@ export function createIdempotencyRecord<T>(
     idempotency_key: key,
     request_hash: requestHash,
     response,
-    status: TransactionStatus.SUCCESS,
+    status: TransactionStatus.CONFIRMED,
     created_at: new Date().toISOString(),
   };
 }

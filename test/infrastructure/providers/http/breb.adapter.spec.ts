@@ -6,7 +6,7 @@ import { Transaction } from '../../../../src/transaction/domain/entity/transacti
 
 describe('BrebAdapter', () => {
   let adapter: BrebAdapter;
-  let brebClient: { postJson: jest.Mock };
+  let brebClient: { postJson: jest.Mock; getJson: jest.Mock };
 
   const mockTransaction = new Transaction(
     'tx-001',
@@ -32,7 +32,10 @@ describe('BrebAdapter', () => {
   };
 
   beforeEach(async () => {
-    brebClient = { postJson: jest.fn().mockResolvedValue(validBrebData) };
+    brebClient = {
+      postJson: jest.fn().mockResolvedValue(validBrebData),
+      getJson: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

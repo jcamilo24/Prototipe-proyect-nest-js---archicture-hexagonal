@@ -4,6 +4,7 @@ import { TransactionStatus } from 'src/transaction/domain/transaction-status.enu
 import type { ExternalTransferResult } from 'src/transaction/domain/providers/external-transfer.service';
 import { CreateTransferRequest } from '../model/create-transfer.request';
 import { CreateTransferResponse } from '../model/create-transfer.response';
+import { GetTransferResponse } from '../model/get-transfer.response';
 
 export function mapRequestToEntity(
   request: CreateTransferRequest,
@@ -44,5 +45,26 @@ export function mapResultToResponse(result: {
       eventDate: externalResponse.eventDate,
       traceId: externalResponse.traceId,
     },
+  };
+}
+
+export function mapTransactionToGetResponse(
+  transaction: Transaction,
+): GetTransferResponse {
+  return {
+    id: transaction.id,
+    status: transaction.status,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    description: transaction.description,
+    receiver: {
+      document: transaction.receiverDocument,
+      documentType: transaction.receiverDocumentType,
+      name: transaction.receiverName,
+      account: transaction.receiverAccount,
+      accountType: transaction.receiverAccountType,
+    },
+    transactionDate: transaction.transactionDate,
+    finalizedAt: transaction.finalizedAt ?? undefined,
   };
 }

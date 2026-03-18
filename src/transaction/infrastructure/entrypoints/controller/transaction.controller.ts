@@ -21,6 +21,7 @@ import { generateRequestHash } from 'src/common/utils/hash.util';
 import { GetTransferResponse } from '../model/get-transfer.response';
 import { GetTransferByIdUseCase } from '../../../application/use-cases/get-transfer-by-id.use-case';
 import { mapTransactionToGetResponse } from './transaction-request.mapper';
+import { getCorrelationId } from 'src/common/utils/correlation.util';
 
 @Controller('transactions')
 export class TransactionController {
@@ -40,7 +41,7 @@ export class TransactionController {
   ): Promise<CreateTransferResponse> {
     const transactionId = body?.transaction?.id;
     this.logger.log(
-      `Request received | idempotencyKey=${idempotencyKey} transactionId=${transactionId}`,
+      `Request received | correlationId=${getCorrelationId() ?? '-'} idempotencyKey=${idempotencyKey} transactionId=${transactionId}`,
     );
 
     if (!idempotencyKey) {
@@ -60,20 +61,20 @@ export class TransactionController {
       );
 
     this.logger.log(
-      `Response ready | transactionId=${response?.id} status=${response?.status}`,
+      `Response ready | correlationId=${getCorrelationId() ?? '-'} transactionId=${response?.id} status=${response?.status}`,
     );
     return response;
   }
 
   @Get('/:id')
   async getTransferById(@Param('id') id: string): Promise<GetTransferResponse> {
-    this.logger.log(`GET transfer requested | id=${id}`);
+    this.logger.log(`GET transfer requested | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
 
     const transaction = await this.getTransferByIdUseCase.execute(id);
 
     const response = mapTransactionToGetResponse(transaction);
 
-    this.logger.log(`Transfer returned | id=${id} status=${response.status}`);
+    this.logger.log(`Transfer returned | correlationId=${getCorrelationId() ?? '-'} id=${id} status=${response.status}`);
 
     return response;
   }

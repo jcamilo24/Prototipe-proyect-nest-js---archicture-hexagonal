@@ -376,3 +376,18 @@ Este enum es la única fuente de verdad para los estados de una transacción en 
 **Consistencia:** Flujo POST sigue CREATED → applyExternalResult(CONFIRMED|FAILED) → save. GET devuelve el estado persistido; `finalizedAt` se carga desde BD cuando la entidad se reconstruye con `toDomain(doc)`.
 
 ---
+
+### Requerimiento 5: correlacion ID
+
+**Objetivo:** Rastrear una request de punta a punta con un único ID: header `x-correlation-id` en entrada y respuesta, en todos los logs (API, use cases, adapter, cliente HTTP, persistencia, idempotencia) y en las llamadas salientes a BREB.
+
+**Qué se hizo (resumen):**
+
+| Paso | Dónde | Qué |
+|------|--------|-----|
+| **1. Contexto** | `src/common/utils/correlation.util.ts` | `AsyncLocalStorage` con `runWithCorrelationId(id, fn)`, `getCorrelationId()` y `setCorrelationId(id)`. El id vive solo en el flujo asíncrono de cada request (no es cache; se “pierde” al terminar la request). |
+| **2. Entrada HTTP** | `correlation-id.interceptor.ts` + `app.module.ts` | Interceptor global: lee o genera `x-correlation-id`, lo pone en la respuesta y ejecuta el handler dentro de `runWithCorrelationId(...)`. |
+| **3. Logs** | Controller, use cases, breb.service, breb-http2.client, transaction.repository, redis-idempotency.service | En cada `logger.log` / `warn` / `error` se añade `correlationId=${getCorrelationId() ?? '-'}` para poder filtrar por id en consola o en el agregador de logs. |
+| **4. Llamadas externas** | `breb-http2.client.ts` | En los headers de cada petición a BREB (POST/GET) se envía `'x-correlation-id': getCorrelationId() ?? ''` para que BREB pueda usar el mismo id en sus logs. |
+
+**Resumen técnico:** Un solo id por request, propagado por contexto (AsyncLocalStorage) sin pasar parámetros; visible en logs y en el header hacia BREB. Worker (Bull, etc.): si se añade después, usar `runWithCorrelationId(job.correlationId ?? randomUUID(), () => ...)` al procesar el job.

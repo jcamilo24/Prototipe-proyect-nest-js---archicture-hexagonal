@@ -6,6 +6,7 @@ import type {
   ExternalTransferService,
 } from '../../domain/providers/external-transfer.service';
 import { throwUseCaseError } from '../errors/use-case-error.helper';
+import { getCorrelationId } from 'src/common/utils/correlation.util';
 
 export type CreateTransferResult = {
   transaction: Transaction;
@@ -23,24 +24,24 @@ export class CreateTransferUseCase {
   async execute(transaction: Transaction): Promise<CreateTransferResult> {
     let externalResponse: ExternalTransferResult;
     try {
-      this.logger.log(`Calling external transfer | transactionId=${transaction.id}`);
+      this.logger.log(`Calling external transfer | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id}`);
       externalResponse =
         await this.externalTransferService.sendTransfer(transaction);
       this.logger.log(
-        `External transfer ok | transactionId=${transaction.id} status=${externalResponse.status} traceId=${externalResponse.traceId ?? '-'}`,
+        `External transfer ok | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} status=${externalResponse.status} traceId=${externalResponse.traceId ?? '-'}`,
       );
     } catch (err) {
       throwUseCaseError(err, `(step: external transfer)`);
     }
     transaction.applyExternalResult(externalResponse.status);
     try {
-      this.logger.log(`Persisting transaction | transactionId=${transaction.id}`);
+      this.logger.log(`Persisting transaction | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id}`);
       await this.transactionRepository.save(transaction);
-      this.logger.log(`Persist ok | transactionId=${transaction.id}`);
+      this.logger.log(`Persist ok | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id}`);
     } catch (err) {
       throwUseCaseError(err, `(step: persist)`);
     }
-    this.logger.log(`Execute completed | transactionId=${transaction.id}`);
+    this.logger.log(`Execute completed | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id}`);
     return {
       transaction,
       externalResponse,

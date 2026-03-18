@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import * as http2 from 'node:http2';
+import { getCorrelationId } from 'src/common/utils/correlation.util';
 
 export const BREB_HTTP2_CLIENT = 'BrebHttp2Client';
 
@@ -28,7 +29,7 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
   async postJson(requestBody: Record<string, unknown>): Promise<unknown> {
     const transactionId = (requestBody?.transaction as { id?: string })?.id;
     this.logger.log(
-      `POST ${this.baseUrl} | transactionId=${transactionId ?? '-'}`,
+      `POST ${this.baseUrl} | correlationId=${getCorrelationId() ?? '-'} transactionId=${transactionId ?? '-'}`,
     );
     const { path, authority, scheme } = this.getRequestTarget();
     return this.request(
@@ -45,7 +46,7 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
 
   async getJson(subPath: string): Promise<unknown> {
     const path = this.buildPath(subPath);
-    this.logger.log(`GET ${this.baseUrl}${path} | path=${subPath}`);
+    this.logger.log(`GET ${this.baseUrl}${path} | correlationId=${getCorrelationId() ?? '-'} path=${subPath}`);
     const { authority, scheme } = this.getRequestTarget();
     return this.request(
       { method: 'GET', path, authority, scheme },
@@ -90,6 +91,7 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
         ':path': path,
         ':scheme': scheme,
         ':authority': authority,
+        'x-correlation-id': getCorrelationId() ?? '',
       };
       if (body) {
         headers['content-type'] = 'application/json';
@@ -121,7 +123,7 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
         const isErrorStatus = statusCode != null && statusCode >= 400;
         if (isErrorStatus) {
           this.logger.warn(
-            `BREB HTTP error | ${logContext} status=${statusCode}`,
+            `BREB HTTP error | correlationId=${getCorrelationId() ?? '-'} ${logContext} status=${statusCode}`,
           );
           const err = new Error(`BREB returned ${statusCode}`) as Error & {
             response?: { status?: number };
@@ -131,7 +133,7 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
           return;
         }
         this.logger.log(
-          `BREB HTTP response | ${logContext} status=${statusCode ?? '-'}`,
+          `BREB HTTP response | correlationId=${getCorrelationId() ?? '-'} ${logContext} status=${statusCode ?? '-'}`,
         );
         resolve(data);
       });
@@ -152,7 +154,7 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
     const origin = `${url.protocol}//${url.hostname}:${url.port || (url.protocol === 'https:' ? 443 : 80)}`;
     this.session = http2.connect(origin);
     this.session.on('error', (err: Error) => {
-      this.logger.warn(`HTTP/2 session error | ${err.message}`);
+      this.logger.warn(`HTTP/2 session error | correlationId=${getCorrelationId() ?? '-'} ${err.message}`);
     });
     return this.session;
   }

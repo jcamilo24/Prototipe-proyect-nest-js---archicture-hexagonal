@@ -10,6 +10,7 @@ import { Transaction } from '../../../domain/entity/transaction.entity';
 import type { TransactionRepository } from '../../../domain/providers/transaction.repository';
 import { TransactionDocument } from './transaction.schema';
 import { TransactionMapper } from './transaction.mapper';
+import { getCorrelationId } from 'src/common/utils/correlation.util';
 
 @Injectable()
 export class TransactionRepositoryImpl implements TransactionRepository {
@@ -21,17 +22,17 @@ export class TransactionRepositoryImpl implements TransactionRepository {
   ) {}
 
  async findById(id: string): Promise<Transaction | null> {
-  this.logger.log(`findById started | id=${id}`);
+  this.logger.log(`findById started | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
 
   try {
     const doc = await this.model.findOne({ id });
 
     if (!doc) {
-      this.logger.log(`Transfer not found | id=${id}`);
+      this.logger.log(`Transfer not found | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
       return null;
     }
 
-    this.logger.log(`Transfer found | id=${id}`);
+    this.logger.log(`Transfer found | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
 
     return TransactionMapper.toDomain(doc);
 
@@ -42,7 +43,7 @@ export class TransactionRepositoryImpl implements TransactionRepository {
 
   async save(transaction: Transaction): Promise<void> {
     this.logger.log(
-      `save started | transactionId=${transaction.id} status=${transaction.status}`,
+      `save started | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} status=${transaction.status}`,
     );
 
     const payload = TransactionMapper.toPersistence(transaction);
@@ -55,7 +56,7 @@ export class TransactionRepositoryImpl implements TransactionRepository {
           { cause: new Error('Mongoose create returned null/undefined') },
         );
       }
-      this.logger.log(`save completed | transactionId=${transaction.id}`);
+      this.logger.log(`save completed | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id}`);
     } catch (err) {
       throwPersistenceError(err, `(transactionId=${transaction.id})`);
     }

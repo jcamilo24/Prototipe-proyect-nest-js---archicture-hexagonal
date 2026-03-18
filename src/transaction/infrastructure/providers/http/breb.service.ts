@@ -10,6 +10,7 @@ import { mapBrebResponseToTransferResult } from './breb-response.mapper';
 import { BREB_HTTP2_CLIENT, type BrebHttp2Client } from './breb-http2.client';
 import { createBrebCircuitBreaker, type BrebCircuitBreakerInstance } from './breb-circuit-breaker.factory';
 import { getBrebCircuitBreakerOptions } from './breb-circuit-breaker.options';
+import { getCorrelationId } from 'src/common/utils/correlation.util';
 
 @Injectable()
 export class BrebAdapter implements ExternalTransferService {
@@ -35,7 +36,7 @@ export class BrebAdapter implements ExternalTransferService {
     try {
       return await this.breaker.fire(transaction);
     } catch (err) {
-      this.logger.error(`Error calling BREB | transactionId=${transaction.id} error=${err}`);
+      this.logger.error(`Error calling BREB | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} error=${err}`);
       throwHttpClientError(err);
       throw err;
     }
@@ -43,12 +44,12 @@ export class BrebAdapter implements ExternalTransferService {
 
   async getTransferById(id: string): Promise<unknown> {
     try {
-      this.logger.log(`getTransferById started | id=${id}`);
+      this.logger.log(`getTransferById started | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
       const data = await this.brebClient.getJson(id);
-      this.logger.log(`getTransferById ok | id=${id}`);
+      this.logger.log(`getTransferById ok | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
       return data;
     } catch (err) {
-      this.logger.error(`Error calling BREB GET | id=${id} error=${err}`);
+      this.logger.error(`Error calling BREB GET | correlationId=${getCorrelationId() ?? '-'} id=${id} error=${err}`);
       throwHttpClientError(err);
       throw err;
     }
@@ -74,12 +75,12 @@ export class BrebAdapter implements ExternalTransferService {
     };
 
     this.logger.log(
-      `sendTransfer started | transactionId=${transaction.id}`,
+      `sendTransfer started | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id}`,
     );
     const data = await this.brebClient.postJson(body);
     const result = mapBrebResponseToTransferResult(data);
     this.logger.log(
-      `sendTransfer ok | transactionId=${transaction.id} status=${result.status} traceId=${result.traceId ?? '-'}`,
+      `sendTransfer ok | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} status=${result.status} traceId=${result.traceId ?? '-'}`,
     );
     return result;
   }

@@ -391,3 +391,44 @@ Este enum es la única fuente de verdad para los estados de una transacción en 
 | **4. Llamadas externas** | `breb-http2.client.ts` | En los headers de cada petición a BREB (POST/GET) se envía `'x-correlation-id': getCorrelationId() ?? ''` para que BREB pueda usar el mismo id en sus logs. |
 
 **Resumen técnico:** Un solo id por request, propagado por contexto (AsyncLocalStorage) sin pasar parámetros; visible en logs y en el header hacia BREB. Worker (Bull, etc.): si se añade después, usar `runWithCorrelationId(job.correlationId ?? randomUUID(), () => ...)` al procesar el job.
+
+## Requerimiento 6: Metricas
+
+**Objetivo:** Exponer métricas operativas en memoria (contadores) y poder consultarlas por HTTP para observabilidad básica (transferencias creadas/fallidas, uso y errores de BREB).
+
+**Qué se hizo (resumen):**
+
+| Capa | Archivo(s) | Qué |
+|------|------------|-----|
+| **Dominio (puerto)** | `src/metrics/domain/providers/metrics.service.provider.ts` | Tipo `MetricsServicePort`: `increment(...)` y `getMetrics()` con cuatro claves: `transfer_created`, `transfer_failed`, `breb_calls`, `breb_errors`. |
+| **Infraestructura** | `src/metrics/infrastructure/providers/http/metrics.service.ts` | Implementación en memoria: objeto con contadores que se incrementan con `increment`. |
+| **Entrypoint** | `src/metrics/infrastructure/entrypoints/controller/metrics.controller.ts` | `GET /metrics` devuelve el objeto de métricas (sin prefijo de controller en la raíz de la app). |
+| **Módulo** | `src/metrics/metrics.module.ts` | Registra el controller y el provider `'MetricsService'`; **exporta** `'MetricsService'` para inyectarlo en otros módulos. |
+| **Transacciones** | `transaction.module.ts` | Importa `MetricsModule` e inyecta `'MetricsService'` en `CreateTransferUseCase`. |
+| **Use case** | `create-transfer.use-case.ts` | Tras `save` exitoso → `increment('transfer_created')`. Si falla la llamada externa o la persistencia → `increment('transfer_failed')`. |
+| **Adapter BREB** | `breb.service.ts` | Al iniciar `sendTransfer` / `getTransferById` → `increment('breb_calls')`. En el `catch` de cada método → `increment('breb_errors')`. |
+
+**Objetivo del ajuste:** Persistencia:evitar perder contadores al reiniciar la API. Antes los contadores vivian solo en RAM; ahora se guardan en Redis.
+
+**Qué se cambió:**
+
+| Capa | Archivo(s) | Cambio |
+|------|------------|--------|
+| **Config Redis** | `src/config/redis/redis.module.ts` | Nuevo `RedisModule` que provee y exporta `REDIS_CLIENT` para reutilizar el mismo provider en varios modulos. |
+| **Puerto de métricas** | `src/metrics/domain/providers/metrics.service.provider.ts` | `increment` y `getMetrics` pasan a ser asíncronos (`Promise`) porque Redis es I/O. |
+| **Servicio de métricas** | `src/metrics/infrastructure/providers/http/metrics.service.ts` | Implementación cambia de objeto en memoria a hash de Redis. Usa `HINCRBY` para incrementar y `HGETALL` para leer. Clave configurable: `METRICS_REDIS_KEY` (default `metrics:counters`). |
+| **Controller de métricas** | `src/metrics/infrastructure/entrypoints/controller/metrics.controller.ts` | `getMetrics()` ahora es `async` y responde lo que viene de Redis. |
+| **MetricsModule** | `src/metrics/metrics.module.ts` | Importa `RedisModule` para inyectar `REDIS_CLIENT` en `MetricsService`. |
+| **TransactionModule** | `src/transaction/transaction.module.ts` | Importa `RedisModule` y deja de declarar `RedisProvider` localmente. |
+| **Lugares que incrementan métricas** | `create-transfer.use-case.ts`, `breb.service.ts` | Se agrega `await` a `metricsService.increment(...)` para respetar la firma asíncrona. |
+
+**Comportamiento final:**
+
+- Los contadores de `transfer_created`, `transfer_failed`, `breb_calls` y `breb_errors` sobreviven reinicios de la API (mientras Redis mantenga datos).
+- `GET /metrics` devuelve el valor persistido acumulado en Redis.
+- Si Redis falla temporalmente, el servicio registra `warn` y evita tumbar la operacion de negocio (best effort para métricas).
+
+**Notas operativas:**
+
+- Para resetear métricas manualmente, basta limpiar la clave Redis (`metrics:counters` o la definida en `METRICS_REDIS_KEY`).
+- Esta solución ya da persistencia basica; si luego quieres observabilidad completa (históricos, dashboards y alertas), el siguiente paso natural es exportar a Prometheus/OpenTelemetry.

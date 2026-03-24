@@ -8,7 +8,9 @@ import {
   Logger,
   Param,
   Post,
+  Res,
 } from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import { CreateTransferUseCase } from '../../../application/use-cases/create-transfer.use-case';
 import type { IdempotencyService } from '../../../domain/providers/idempotency.service';
 import type { CreateTransferRequest } from '../model/create-transfer.request';
@@ -67,15 +69,21 @@ export class TransactionController {
   }
 
   @Get('/:id')
-  async getTransferById(@Param('id') id: string): Promise<GetTransferResponse> {
+  async getTransferById(
+    @Param('id') id: string,
+    @Res({ passthrough: false }) res: FastifyReply,
+  ): Promise<void> {
     this.logger.log(`GET transfer requested | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
 
     const transaction = await this.getTransferByIdUseCase.execute(id);
+    if (!transaction) {
+      this.logger.warn(`Transfer not found, responding 404 | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
+      await res.status(404).send({ message: `Transfer with id ${id} not found` });
+      return;
+    }
 
     const response = mapTransactionToGetResponse(transaction);
-
     this.logger.log(`Transfer returned | correlationId=${getCorrelationId() ?? '-'} id=${id} status=${response.status}`);
-
-    return response;
+    await res.status(200).send(response);
   }
 }

@@ -1,12 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { BrebAdapter } from '../../../../src/transaction/infrastructure/providers/http/breb.service';
 import { BREB_HTTP2_CLIENT } from '../../../../src/transaction/infrastructure/providers/http/breb-http2.client';
 import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
+import { TransactionStatus } from '../../../../src/transaction/domain/transaction-status.enum';
+import type { MetricsServicePort } from '../../../../src/metrics/domain/providers/metrics.service.provider';
 
 describe('BrebAdapter', () => {
   let adapter: BrebAdapter;
   let brebClient: { postJson: jest.Mock; getJson: jest.Mock };
+  let metricsService: { increment: jest.Mock };
 
   const mockTransaction = new Transaction(
     'tx-001',
@@ -18,7 +20,7 @@ describe('BrebAdapter', () => {
     'Juan Pérez',
     '1234567890',
     'Ahorros',
-    'PENDING',
+    TransactionStatus.CREATED,
   );
 
   const validBrebData = {
@@ -36,24 +38,15 @@ describe('BrebAdapter', () => {
       postJson: jest.fn().mockResolvedValue(validBrebData),
       getJson: jest.fn(),
     };
+    metricsService = {
+      increment: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BrebAdapter,
         { provide: BREB_HTTP2_CLIENT, useValue: brebClient },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn((key: string) =>
-              ({
-                BREB_CIRCUIT_TIMEOUT_MS: '15000',
-                BREB_CIRCUIT_ERROR_THRESHOLD_PERCENT: '65',
-                BREB_CIRCUIT_RESET_TIMEOUT_MS: '30000',
-                BREB_CIRCUIT_VOLUME_THRESHOLD: '10',
-              }[key]),
-            ),
-          },
-        },
+        { provide: 'MetricsService', useValue: metricsService as MetricsServicePort },
       ],
     }).compile();
 
@@ -89,7 +82,7 @@ describe('BrebAdapter', () => {
 
     expect(result).toEqual({
       externalId: 'e2e-123',
-      status: 'SUCCESS',
+      status: TransactionStatus.CONFIRMED,
       traceId: 'trace-789',
       qrCodeId: 'qr-456',
       eventDate: '2025-02-27T12:00:00Z',

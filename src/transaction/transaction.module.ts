@@ -12,20 +12,23 @@ import {
   TransactionDocument,
   TransactionSchema,
 } from './infrastructure/providers/persistence/transaction.schema';
-import { RedisProvider } from 'src/config/redis/redis.provider';
 import { RedisIdempotencyService } from './infrastructure/idempotency/redis-idempotency.service';
 import { GetTransferByIdUseCase } from './application/use-cases/get-transfer-by-id.use-case';
 import { TransactionRepository } from './domain/providers/transaction.repository';
+import { MetricsModule } from 'src/metrics/metrics.module';
+import { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
+import { RedisModule } from 'src/config/redis/redis.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: TransactionDocument.name, schema: TransactionSchema },
     ]),
+    MetricsModule,
+    RedisModule,
   ],
   controllers: [TransactionController],
   providers: [
-    RedisProvider,
     {
       provide: 'IdempotencyService',
       useClass: RedisIdempotencyService,
@@ -35,12 +38,14 @@ import { TransactionRepository } from './domain/providers/transaction.repository
       useFactory: (
         transactionRepository: TransactionRepositoryImpl,
         externalTransferService: BrebAdapter,
+        metricsService: MetricsServicePort,
       ) =>
         new CreateTransferUseCase(
           transactionRepository,
           externalTransferService,
+          metricsService,
         ),
-      inject: ['TransactionRepository', 'ExternalTransferService'],
+      inject: ['TransactionRepository', 'ExternalTransferService', 'MetricsService'],
     },
     {
       provide: GetTransferByIdUseCase,

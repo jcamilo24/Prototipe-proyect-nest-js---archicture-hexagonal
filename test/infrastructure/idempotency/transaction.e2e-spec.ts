@@ -5,8 +5,13 @@ import type { Server } from 'http';
 import request from 'supertest';
 import { TransactionController } from '../../../src/transaction/infrastructure/entrypoints/controller/transaction.controller';
 import { CreateTransferUseCase } from '../../../src/transaction/application/use-cases/create-transfer.use-case';
+import { GetTransferByIdUseCase } from '../../../src/transaction/application/use-cases/get-transfer-by-id.use-case';
+import { Transaction } from '../../../src/transaction/domain/entity/transaction.entity';
+import { TransactionStatus } from '../../../src/transaction/domain/transaction-status.enum';
 import type { CreateTransferResponse } from '../../../src/transaction/infrastructure/entrypoints/model/create-transfer.response';
 import type { IdempotencyService } from '../../../src/transaction/domain/providers/idempotency.service';
+import type { TransactionRepository } from '../../../src/transaction/domain/providers/transaction.repository';
+import type { MetricsServicePort } from '../../../src/metrics/domain/providers/metrics.service.provider';
 
 /** In-memory idempotency for e2e: same key + same hash → cached response; same key + different hash → 409. */
 function createMockIdempotencyService(): IdempotencyService {
@@ -39,18 +44,26 @@ describe('TransactionController (e2e)', () => {
   let app: INestApplication;
   let mockIdempotencyService: IdempotencyService;
 
-  const mockTransactionRepository = {
+  const mockTransactionRepository: {
+    save: jest.Mock;
+    findById: jest.Mock;
+  } = {
     save: jest.fn().mockResolvedValue(undefined),
+    findById: jest.fn().mockResolvedValue(null),
   };
 
   const mockExternalTransferService = {
     sendTransfer: jest.fn().mockResolvedValue({
       externalId: 'e2e-end-to-end-id',
-      status: 'SUCCESS',
+      status: TransactionStatus.CONFIRMED,
       traceId: 'e2e-trace-id',
       qrCodeId: 'e2e-qr-code',
       eventDate: '2025-02-27T12:00:00Z',
     }),
+  };
+  const mockMetricsService: MetricsServicePort = {
+    increment: jest.fn().mockResolvedValue(undefined),
+    getMetrics: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -60,12 +73,23 @@ describe('TransactionController (e2e)', () => {
       providers: [
         {
           provide: CreateTransferUseCase,
-          useFactory: (transactionRepository, externalTransferService) =>
+          useFactory: (
+            transactionRepository: TransactionRepository,
+            externalTransferService: typeof mockExternalTransferService,
+            metricsService: MetricsServicePort,
+          ) =>
             new CreateTransferUseCase(
               transactionRepository,
-              externalTransferService,
+              externalTransferService as never,
+              metricsService,
             ),
-          inject: ['TransactionRepository', 'ExternalTransferService'],
+          inject: ['TransactionRepository', 'ExternalTransferService', 'MetricsService'],
+        },
+        {
+          provide: GetTransferByIdUseCase,
+          useFactory: (transactionRepository: TransactionRepository) =>
+            new GetTransferByIdUseCase(transactionRepository),
+          inject: ['TransactionRepository'],
         },
         {
           provide: 'IdempotencyService',
@@ -78,6 +102,10 @@ describe('TransactionController (e2e)', () => {
         {
           provide: 'ExternalTransferService',
           useValue: mockExternalTransferService,
+        },
+        {
+          provide: 'MetricsService',
+          useValue: mockMetricsService,
         },
       ],
     }).compile();
@@ -94,11 +122,12 @@ describe('TransactionController (e2e)', () => {
     jest.clearAllMocks();
     mockExternalTransferService.sendTransfer.mockResolvedValue({
       externalId: 'e2e-end-to-end-id',
-      status: 'SUCCESS',
+      status: TransactionStatus.CONFIRMED,
       traceId: 'e2e-trace-id',
       qrCodeId: 'e2e-qr-code',
       eventDate: '2025-02-27T12:00:00Z',
     });
+    mockTransactionRepository.findById.mockResolvedValue(null);
   });
 
   it('POST /transactions/transfer - returns 200 and response body with id, status, endToEndId, properties', () => {
@@ -131,7 +160,7 @@ describe('TransactionController (e2e)', () => {
         const responseBody = res.body as CreateTransferResponse;
         expect(responseBody).toMatchObject({
           id: 'tx-e2e-001',
-          status: 'SUCCESS',
+          status: TransactionStatus.CONFIRMED,
           endToEndId: 'e2e-end-to-end-id',
           properties: {
             traceId: 'e2e-trace-id',
@@ -224,7 +253,7 @@ describe('TransactionController (e2e)', () => {
     expect(first.body).toEqual(second.body);
     expect(first.body).toMatchObject({
       id: 'tx-e2e-idem',
-      status: 'SUCCESS',
+      status: TransactionStatus.CONFIRMED,
       endToEndId: 'e2e-end-to-end-id',
     });
     expect(mockExternalTransferService.sendTransfer).toHaveBeenCalledTimes(1);
@@ -277,6 +306,52 @@ describe('TransactionController (e2e)', () => {
       .set(IDEMPOTENCY_HEADER, key)
       .send(body2)
       .expect(409);
+  });
+
+  it('GET /transactions/:id - returns 200 and body when transfer exists', async () => {
+    const storedTransaction = new Transaction(
+      'tx-e2e-get',
+      75000,
+      'USD',
+      'E2E GET test',
+      '111',
+      'CC',
+      'GET User',
+      'acc-get',
+      'Ahorros',
+      TransactionStatus.CONFIRMED,
+    );
+    mockTransactionRepository.findById.mockResolvedValueOnce(storedTransaction);
+
+    const server = app.getHttpServer() as unknown as Server;
+
+    const res = await request(server)
+      .get('/transactions/tx-e2e-get')
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      id: 'tx-e2e-get',
+      status: TransactionStatus.CONFIRMED,
+      amount: 75000,
+      currency: 'USD',
+      description: 'E2E GET test',
+    });
+    expect(mockTransactionRepository.findById).toHaveBeenCalledWith('tx-e2e-get');
+  });
+
+  it('GET /transactions/:id - returns 404 when transfer not found', async () => {
+    mockTransactionRepository.findById.mockResolvedValueOnce(null);
+
+    const server = app.getHttpServer() as unknown as Server;
+
+    const res = await request(server)
+      .get('/transactions/non-existent-id')
+      .expect(404);
+
+    expect(res.body).toMatchObject({
+      message: 'Transfer with id non-existent-id not found',
+    });
+    expect(mockTransactionRepository.findById).toHaveBeenCalledWith('non-existent-id');
   });
 
   it('POST /transactions/transfer - missing Idempotency-Key returns 400', async () => {

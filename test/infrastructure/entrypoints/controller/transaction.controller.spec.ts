@@ -2,12 +2,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { TransactionController } from '../../../../src/transaction/infrastructure/entrypoints/controller/transaction.controller';
 import { CreateTransferUseCase } from '../../../../src/transaction/application/use-cases/create-transfer.use-case';
+import { GetTransferByIdUseCase } from '../../../../src/transaction/application/use-cases/get-transfer-by-id.use-case';
 import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
+import { TransactionStatus } from '../../../../src/transaction/domain/transaction-status.enum';
 import type { CreateTransferResponse } from '../../../../src/transaction/infrastructure/entrypoints/model/create-transfer.response';
+import type { FastifyReply } from 'fastify';
 
 describe('TransactionController', () => {
   let controller: TransactionController;
   let createTransferUseCase: { execute: jest.Mock };
+  let getTransferByIdUseCase: { execute: jest.Mock };
   let idempotencyService: { handle: jest.Mock };
 
   const validRequestBody = {
@@ -37,7 +41,7 @@ describe('TransactionController', () => {
       'MI EMPRESA S.A.S',
       '323232',
       'Ahorros',
-      'SUCCESS',
+      TransactionStatus.CONFIRMED,
     ),
     externalResponse: {
       externalId: 'e2e-123',
@@ -51,6 +55,9 @@ describe('TransactionController', () => {
   beforeEach(async () => {
     createTransferUseCase = {
       execute: jest.fn().mockResolvedValue(mockUseCaseResult),
+    };
+    getTransferByIdUseCase = {
+      execute: jest.fn(),
     };
     idempotencyService = {
       handle: jest
@@ -68,6 +75,7 @@ describe('TransactionController', () => {
       controllers: [TransactionController],
       providers: [
         { provide: CreateTransferUseCase, useValue: createTransferUseCase },
+        { provide: GetTransferByIdUseCase, useValue: getTransferByIdUseCase },
         { provide: 'IdempotencyService', useValue: idempotencyService },
       ],
     }).compile();
@@ -94,11 +102,11 @@ describe('TransactionController', () => {
     expect(passedTransaction.id).toBe('tx-002');
     expect(passedTransaction.amount).toBe(111000);
     expect(passedTransaction.receiverDocument).toBe('3006985758');
-    expect(passedTransaction.status).toBe('PENDING');
+    expect(passedTransaction.status).toBe(TransactionStatus.CREATED);
 
     expect(response).toEqual({
       id: 'tx-002',
-      status: 'SUCCESS',
+      status: TransactionStatus.CONFIRMED,
       endToEndId: 'e2e-123',
       qrCodeId: 'qr-xyz',
       properties: {
@@ -112,5 +120,55 @@ describe('TransactionController', () => {
     await expect(
       controller.create(undefined as never, validRequestBody),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('GET getTransferById - returns 200 and sends response when transfer exists', async () => {
+    const mockTransaction = new Transaction(
+      'tx-get-001',
+      50000,
+      'PESOS',
+      'Test',
+      '123',
+      'CC',
+      'Test User',
+      'acc-1',
+      'Ahorros',
+      TransactionStatus.CONFIRMED,
+    );
+    getTransferByIdUseCase.execute.mockResolvedValue(mockTransaction);
+
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      send: jest.fn().mockResolvedValue(undefined),
+    } as unknown as FastifyReply;
+
+    await controller.getTransferById('tx-get-001', res);
+
+    expect(getTransferByIdUseCase.execute).toHaveBeenCalledWith('tx-get-001');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'tx-get-001',
+        status: TransactionStatus.CONFIRMED,
+        amount: 50000,
+      }),
+    );
+  });
+
+  it('GET getTransferById - returns 404 when transfer not found', async () => {
+    getTransferByIdUseCase.execute.mockResolvedValue(null);
+
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      send: jest.fn().mockResolvedValue(undefined),
+    } as unknown as FastifyReply;
+
+    await controller.getTransferById('non-existent', res);
+
+    expect(getTransferByIdUseCase.execute).toHaveBeenCalledWith('non-existent');
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.send).toHaveBeenCalledWith({
+      message: 'Transfer with id non-existent not found',
+    });
   });
 });

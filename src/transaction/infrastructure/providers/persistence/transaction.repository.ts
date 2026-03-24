@@ -22,13 +22,13 @@ export class TransactionRepositoryImpl implements TransactionRepository {
   ) {}
 
  async findById(id: string): Promise<Transaction | null> {
-  this.logger.log(`findById started | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
+  this.logger.debug(`findById started | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
 
   try {
     const doc = await this.model.findOne({ id });
 
     if (!doc) {
-      this.logger.log(`Transfer not found | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
+      this.logger.warn(`Transfer not found | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
       return null;
     }
 
@@ -42,7 +42,7 @@ export class TransactionRepositoryImpl implements TransactionRepository {
 }
 
   async save(transaction: Transaction): Promise<void> {
-    this.logger.log(
+    this.logger.debug(
       `save started | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} status=${transaction.status}`,
     );
 

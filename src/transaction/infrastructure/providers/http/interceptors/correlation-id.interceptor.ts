@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { from, lastValueFrom } from 'rxjs';
-import { runWithCorrelationId } from '../utils/correlation.util';
+import { runWithCorrelationId } from '../../../../../common/utils/correlation.util';
 
 @Injectable()
 export class CorrelationIdInterceptor implements NestInterceptor {

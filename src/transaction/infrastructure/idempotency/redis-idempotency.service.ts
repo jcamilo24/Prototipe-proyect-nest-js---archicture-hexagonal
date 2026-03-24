@@ -37,7 +37,7 @@ export class RedisIdempotencyService implements IdempotencyService {
     execute: () => Promise<T>,
   ): Promise<T> {
     const redisKey = `${this.keyPrefix}:${key}`;
-    this.logger.log(`Idempotency check | correlationId=${getCorrelationId() ?? '-'} key=${key} redisKey=${redisKey}`);
+    this.logger.debug(`Idempotency check | correlationId=${getCorrelationId() ?? '-'} key=${key} redisKey=${redisKey}`);
 
     const stored = await this.redis.get(redisKey);
 

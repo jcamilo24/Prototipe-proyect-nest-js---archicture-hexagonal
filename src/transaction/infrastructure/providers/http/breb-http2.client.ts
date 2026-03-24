@@ -1,6 +1,12 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as http2 from 'node:http2';
 import { getCorrelationId } from 'src/common/utils/correlation.util';
+import {
+  createBrebHttpCircuitBreaker,
+  type BrebHttpCircuitBreakerInstance,
+} from './breb-circuit-breaker.factory';
+import { getBrebCircuitBreakerOptions } from './breb-circuit-breaker.options';
 
 export const BREB_HTTP2_CLIENT = 'BrebHttp2Client';
 
@@ -22,13 +28,27 @@ type RequestOptions = {
 @Injectable()
 export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
   private readonly logger = new Logger(BrebHttp2ClientImpl.name);
+  private readonly breaker: BrebHttpCircuitBreakerInstance;
   private session: http2.ClientHttp2Session | null = null;
   private readonly baseUrl: string =
     process.env.BREB_BASE_URL ?? 'http://localhost:3001/transfer';
 
+  constructor(private readonly configService: ConfigService) {
+    const options = getBrebCircuitBreakerOptions(this.configService);
+    this.breaker = createBrebHttpCircuitBreaker(this.logger, options);
+  }
+
   async postJson(requestBody: Record<string, unknown>): Promise<unknown> {
+    return this.breaker.fire(() => this.doPostJson(requestBody));
+  }
+
+  async getJson(subPath: string): Promise<unknown> {
+    return this.breaker.fire(() => this.doGetJson(subPath));
+  }
+
+  private async doPostJson(requestBody: Record<string, unknown>): Promise<unknown> {
     const transactionId = (requestBody?.transaction as { id?: string })?.id;
-    this.logger.log(
+    this.logger.debug(
       `POST ${this.baseUrl} | correlationId=${getCorrelationId() ?? '-'} transactionId=${transactionId ?? '-'}`,
     );
     const { path, authority, scheme } = this.getRequestTarget();
@@ -44,9 +64,9 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
     );
   }
 
-  async getJson(subPath: string): Promise<unknown> {
+  private async doGetJson(subPath: string): Promise<unknown> {
     const path = this.buildPath(subPath);
-    this.logger.log(`GET ${this.baseUrl}${path} | correlationId=${getCorrelationId() ?? '-'} path=${subPath}`);
+    this.logger.debug(`GET ${this.baseUrl}${path} | correlationId=${getCorrelationId() ?? '-'} path=${subPath}`);
     const { authority, scheme } = this.getRequestTarget();
     return this.request(
       { method: 'GET', path, authority, scheme },

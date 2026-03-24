@@ -4,7 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { getMongoUri } from './config/mongo/mongo.config';
 import { TransactionModule } from './transaction/transaction.module';
-import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
+import { CorrelationIdInterceptor } from './transaction/infrastructure/providers/http/interceptors/correlation-id.interceptor';
 
 @Module({
   providers: [

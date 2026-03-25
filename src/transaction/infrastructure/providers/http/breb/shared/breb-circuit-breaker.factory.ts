@@ -1,8 +1,8 @@
 import { Logger } from '@nestjs/common';
 import CircuitBreaker from 'opossum';
 
-import type { Transaction } from '../../../domain/entity/transaction.entity';
-import type { ExternalTransferResult } from '../../../domain/providers/external-transfer.service';
+import type { Transaction } from '../../../../../domain/entity/transaction.entity';
+import type { ExternalTransferResult } from '../../../../../domain/providers/external-transfer.service';
 
 export type BrebCircuitBreakerOptions = {
   timeout: number;

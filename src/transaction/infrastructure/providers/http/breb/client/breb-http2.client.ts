@@ -5,15 +5,16 @@ import { getCorrelationId } from 'src/common/utils/correlation.util';
 import {
   createBrebHttpCircuitBreaker,
   type BrebHttpCircuitBreakerInstance,
-} from './breb-circuit-breaker.factory';
-import { getBrebCircuitBreakerOptions } from './breb-circuit-breaker.options';
+} from '../shared/breb-circuit-breaker.factory';
+import { getBrebCircuitBreakerOptions } from '../shared/breb-circuit-breaker.options';
 
-export const BREB_HTTP2_CLIENT = 'BrebHttp2Client';
+export const BREB_HTTP2_CLIENT_V1 = 'BrebHttp2ClientV1';
+export const BREB_HTTP2_CLIENT_V2 = 'BrebHttp2ClientV2';
+
+export const BREB_HTTP2_CLIENT = BREB_HTTP2_CLIENT_V1;
 
 export interface BrebHttp2Client {
-  /** POST con body JSON al baseUrl (ej. crear transferencia). */
   postJson(body: Record<string, unknown>): Promise<unknown>;
-  /** GET a baseUrl + path (ej. consultar por id). Path es el segmento tras la base (ej. "123" → GET /transfer/123). */
   getJson(path: string): Promise<unknown>;
 }
 
@@ -30,10 +31,13 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
   private readonly logger = new Logger(BrebHttp2ClientImpl.name);
   private readonly breaker: BrebHttpCircuitBreakerInstance;
   private session: http2.ClientHttp2Session | null = null;
-  private readonly baseUrl: string =
-    process.env.BREB_BASE_URL ?? 'http://localhost:3001/transfer';
+  private readonly baseUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    baseUrl: string,
+  ) {
+    this.baseUrl = baseUrl;
     const options = getBrebCircuitBreakerOptions(this.configService);
     this.breaker = createBrebHttpCircuitBreaker(this.logger, options);
   }
@@ -90,7 +94,6 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
     return { path, authority, scheme };
   }
 
-  /** Construye el path para GET: base path + segmento (ej. "/transfer" + "123" → "/transfer/123"). */
   private buildPath(subPath: string): string {
     const url = new URL(this.baseUrl);
     const basePath = url.pathname?.replace(/\/$/, '') || '/';

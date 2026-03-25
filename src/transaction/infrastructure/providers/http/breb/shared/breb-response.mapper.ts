@@ -1,5 +1,5 @@
-import type { ExternalTransferResult } from '../../../domain/providers/external-transfer.service';
-import { TransactionStatus } from '../../../domain/transaction-status.enum';
+import type { ExternalTransferResult } from '../../../../../domain/providers/external-transfer.service';
+import { TransactionStatus } from '../../../../../domain/transaction-status.enum';
 
 interface BrebResponseData {
   end_to_end_id?: string;

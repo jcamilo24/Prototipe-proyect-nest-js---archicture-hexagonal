@@ -262,7 +262,7 @@ curl -v --http2-prior-knowledge -X POST http://localhost:3000/transactions/trans
 
 #### Archivo: `breb-http2.client.ts`
 
-**Ubicación:** `src/transaction/infrastructure/providers/http/breb-http2.client.ts`
+**Ubicación:** `src/transaction/infrastructure/providers/http/breb/client/breb-http2.client.ts`
 
 **Propósito:** Encapsular la comunicación HTTP/2 con BREB en un solo lugar: una sesión reutilizada, POST con body JSON y cierre ordenado al apagar el módulo.
 
@@ -432,3 +432,60 @@ Este enum es la única fuente de verdad para los estados de una transacción en 
 
 - Para resetear métricas manualmente, basta limpiar la clave Redis (`metrics:counters` o la definida en `METRICS_REDIS_KEY`).
 - Esta solución ya da persistencia basica; si luego quieres observabilidad completa (históricos, dashboards y alertas), el siguiente paso natural es exportar a Prometheus/OpenTelemetry.
+
+---
+
+## Requerimiento 7: Versionamiento del adapter BREB
+
+### Dónde vive cada cosa (core vs “otro BREB”)
+
+| Lugar | Rol |
+|-------|-----|
+| **Core API** (este repo) | Define el **puerto** `ExternalTransferService` (use cases solo conocen `sendTransfer` / `getTransferById`). Registra **qué adapter** usar según configuración. |
+| **Infraestructura en core** | **Adapters** `BrebV1Adapter` y `BrebV2Adapter` + **cliente HTTP** `BrebHttp2ClientImpl` con **URL base distinta** por versión. Aquí se traduce el dominio a las rutas reales de cada versión. |
+| **Otro servicio / mock BREB** | Es el proceso que **escucha** en `.../transfer` o `.../payments`. El core no debe duplicar su lógica de negocio; solo apuntar al host/path correcto. |
+
+### Qué se hizo (resumen técnico)
+
+| Pieza | Archivo(s) | Qué |
+|------|------------|-----|
+| **Puerto compartido** | `domain/providers/external-transfer.service.ts` | Sin cambio de contrato: el dominio sigue dependiendo del mismo tipo `ExternalTransferService`. |
+| **Lógica compartida del adapter** | `http/breb/shared/breb-service.base.ts` | Clase abstracta `BrebAdapterBase` con `sendTransfer` y `getTransferById` (mapeo, métricas, logs). Evita duplicar cientos de líneas entre v1 y v2. |
+| **Adapter v1** | `http/breb/v1/breb-v1.adapter.ts` | `BrebV1Adapter` extiende la base e inyecta el token **`BREB_HTTP2_CLIENT_V1`**. |
+| **Adapter v2** | `http/breb/v2/breb-v2.adapter.ts` | `BrebV2Adapter` igual, pero inyecta **`BREB_HTTP2_CLIENT_V2`**. |
+| **Cliente HTTP** | `http/breb/client/breb-http2.client.ts` | `BrebHttp2ClientImpl` recibe la **URL base en el constructor** (ya no fija una sola URL en el código). `resolveBrebV1BaseUrl` / `resolveBrebV2BaseUrl` leen env con defaults: v1 → `.../transfer`, v2 → `.../payments`. |
+| **Tokens de inyección** | `http/breb/client/breb-http2.client.ts` | `BREB_HTTP2_CLIENT_V1` y `BREB_HTTP2_CLIENT_V2` (dos instancias del mismo cliente, distinta base URL). `BREB_HTTP2_CLIENT` queda como alias de v1 por compatibilidad. |
+| **Mapper / circuit breaker / errores HTTP** | `http/breb/shared/breb-response.mapper.ts`, `breb-circuit-breaker.*`, `http-client-error.mapper.ts` | Código compartido por todas las versiones del cliente BREB. |
+| **Selección en runtime** | `transaction.module.ts` | Se registran **ambos** adapters y **dos** clientes. El provider `'ExternalTransferService'` usa **factory**: lee `BREB_ADAPTER_VERSION` (`v1` o `v2`) y devuelve `BrebV1Adapter` o `BrebV2Adapter`. El use case sigue inyectando solo `'ExternalTransferService'`. |
+
+### Variables de entorno
+
+| Variable | Descripción |
+|----------|-------------|
+| `BREB_ADAPTER_VERSION` | `v1` (default) o `v2`: qué adapter usa el core. |
+| `BREB_V1_BASE_URL` | URL base de la API v1 (path típico `.../transfer`). Si no existe, se usa `BREB_BASE_URL` y luego el default local. |
+| `BREB_V2_BASE_URL` | URL base de la API v2 (path típico `.../payments`). Default: `http://localhost:3001/payments`. |
+| `BREB_BASE_URL` | Compatibilidad: fallback para v1 si no defines `BREB_V1_BASE_URL`. |
+
+### Desacoplamiento (cómo se demuestra)
+
+- **Dominio / aplicación:** solo conocen `ExternalTransferService`; no saben si existe transfer o payments.
+- **Infraestructura:** la versión es un **detalle de despliegue** (env + factory), no un `if` en el use case.
+- **Extensión futura:** una v3 sería otro adapter + otro token + otra URL; el mapeo de respuesta sigue centralizado en `breb/shared/breb-response.mapper.ts` mientras el contrato JSON sea compatible.
+
+### Estructura de carpetas (infra `http/breb`)
+
+Todo lo relacionado con BREB queda bajo `src/transaction/infrastructure/providers/http/breb/`:
+
+| Carpeta | Contenido |
+|---------|-----------|
+| **`breb/client/`** | Cliente HTTP/2 (`breb-http2.client.ts`): tokens `BREB_HTTP2_CLIENT_V1` / `V2`, `BrebHttp2ClientImpl`, URLs `resolveBrebV*`. |
+| **`breb/shared/`** | Base clase `BrebAdapterBase` (`breb-service.base.ts`), mapper de respuesta, circuit breaker, mapeo de errores HTTP. |
+| **`breb/v1/`** | Solo el adapter **`breb-v1.adapter.ts`** (`BrebV1Adapter`). |
+| **`breb/v2/`** | Solo el adapter **`breb-v2.adapter.ts`** (`BrebV2Adapter`). |
+
+Fuera de `breb/` siguen otros recursos HTTP genéricos, por ejemplo **`http/interceptors/`** (correlation id).
+
+### Mock / servicio BREB (fuera del core)
+
+Para probar v2 en local, el mock BREB debe exponer las mismas operaciones (POST/GET) bajo **`/payments`** con el mismo cuerpo/respuesta esperado por el mapper, o el mock debe adaptarse. El core solo cambia el **prefijo** de la URL; no implementa la lógica del otro servicio.

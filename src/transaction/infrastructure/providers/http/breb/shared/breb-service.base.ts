@@ -1,24 +1,21 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { throwHttpClientError } from './http-client-error.mapper';
-import { Transaction } from '../../../domain/entity/transaction.entity';
+import { Transaction } from '../../../../../domain/entity/transaction.entity';
 import type {
   ExternalTransferResult,
   ExternalTransferService,
-} from '../../../domain/providers/external-transfer.service';
+} from '../../../../../domain/providers/external-transfer.service';
 import { mapBrebResponseToTransferResult } from './breb-response.mapper';
-import { BREB_HTTP2_CLIENT, type BrebHttp2Client } from './breb-http2.client';
+import type { BrebHttp2Client } from '../client/breb-http2.client';
 import { getCorrelationId } from 'src/common/utils/correlation.util';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
 
-@Injectable()
-export class BrebAdapter implements ExternalTransferService {
-  private readonly logger = new Logger(BrebAdapter.name);
+export abstract class BrebAdapterBase implements ExternalTransferService {
+  protected abstract readonly logger: Logger;
 
   constructor(
-    @Inject(BREB_HTTP2_CLIENT)
-    private readonly brebClient: BrebHttp2Client,
-    @Inject('MetricsService')
-    private readonly metricsService: MetricsServicePort,
+    protected readonly brebClient: BrebHttp2Client,
+    protected readonly metricsService: MetricsServicePort,
   ) {}
 
   async sendTransfer(
@@ -52,7 +49,9 @@ export class BrebAdapter implements ExternalTransferService {
       return result;
     } catch (err) {
       await this.metricsService.increment('breb_errors');
-      this.logger.error(`Error calling BREB | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} error=${err}`);
+      this.logger.error(
+        `Error calling BREB | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} error=${err}`,
+      );
       throwHttpClientError(err);
       throw err;
     }
@@ -60,14 +59,20 @@ export class BrebAdapter implements ExternalTransferService {
 
   async getTransferById(id: string): Promise<unknown> {
     try {
-      this.logger.debug(`getTransferById started | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
+      this.logger.debug(
+        `getTransferById started | correlationId=${getCorrelationId() ?? '-'} id=${id}`,
+      );
       await this.metricsService.increment('breb_calls');
       const data = await this.brebClient.getJson(id);
-      this.logger.log(`getTransferById ok | correlationId=${getCorrelationId() ?? '-'} id=${id}`);
+      this.logger.log(
+        `getTransferById ok | correlationId=${getCorrelationId() ?? '-'} id=${id}`,
+      );
       return data;
     } catch (err) {
       await this.metricsService.increment('breb_errors');
-      this.logger.error(`Error calling BREB GET | correlationId=${getCorrelationId() ?? '-'} id=${id} error=${err}`);
+      this.logger.error(
+        `Error calling BREB GET | correlationId=${getCorrelationId() ?? '-'} id=${id} error=${err}`,
+      );
       throwHttpClientError(err);
       throw err;
     }

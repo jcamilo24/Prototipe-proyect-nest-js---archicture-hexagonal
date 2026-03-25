@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BrebAdapter } from '../../../../src/transaction/infrastructure/providers/http/breb.service';
-import { BREB_HTTP2_CLIENT } from '../../../../src/transaction/infrastructure/providers/http/breb-http2.client';
+import { BrebV1Adapter } from '../../../../src/transaction/infrastructure/providers/http/breb/v1/breb-v1.adapter';
+import { BREB_HTTP2_CLIENT_V1 } from '../../../../src/transaction/infrastructure/providers/http/breb/client/breb-http2.client';
 import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from '../../../../src/transaction/domain/transaction-status.enum';
 import type { MetricsServicePort } from '../../../../src/metrics/domain/providers/metrics.service.provider';
 
-describe('BrebAdapter', () => {
-  let adapter: BrebAdapter;
+describe('BrebV1Adapter', () => {
+  let adapter: BrebV1Adapter;
   let brebClient: { postJson: jest.Mock; getJson: jest.Mock };
   let metricsService: { increment: jest.Mock };
 
@@ -44,13 +44,13 @@ describe('BrebAdapter', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        BrebAdapter,
-        { provide: BREB_HTTP2_CLIENT, useValue: brebClient },
+        BrebV1Adapter,
+        { provide: BREB_HTTP2_CLIENT_V1, useValue: brebClient },
         { provide: 'MetricsService', useValue: metricsService as MetricsServicePort },
       ],
     }).compile();
 
-    adapter = module.get<BrebAdapter>(BrebAdapter);
+    adapter = module.get<BrebV1Adapter>(BrebV1Adapter);
   });
 
   it('should be defined', () => {

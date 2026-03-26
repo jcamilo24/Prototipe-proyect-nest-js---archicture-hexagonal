@@ -1,14 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BrebV1Adapter } from '../../../../src/transaction/infrastructure/providers/http/breb/v1/breb-v1.adapter';
-import { BREB_HTTP2_CLIENT_V1 } from '../../../../src/transaction/infrastructure/providers/http/breb/client/breb-http2.client';
-import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
-import { TransactionStatus } from '../../../../src/transaction/domain/transaction-status.enum';
-import type { MetricsServicePort } from '../../../../src/metrics/domain/providers/metrics.service.provider';
+import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
+import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
+import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
+import { BREB_HTTP2_CLIENT_V1 } from 'src/transaction/infrastructure/providers/http/breb/client/breb-http2.client';
+import { BrebV1Adapter } from 'src/transaction/infrastructure/providers/http/breb/v1/breb-v1.adapter';
 
 describe('BrebV1Adapter', () => {
   let adapter: BrebV1Adapter;
   let brebClient: { postJson: jest.Mock; getJson: jest.Mock };
-  let metricsService: { increment: jest.Mock };
+  let metricsService: {
+    increment: jest.Mock;
+    getMetrics: jest.Mock;
+  };
 
   const mockTransaction = new Transaction(
     'tx-001',
@@ -40,13 +43,22 @@ describe('BrebV1Adapter', () => {
     };
     metricsService = {
       increment: jest.fn().mockResolvedValue(undefined),
+      getMetrics: jest.fn().mockResolvedValue({
+        transfer_created: 0,
+        transfer_failed: 0,
+        breb_calls: 0,
+        breb_errors: 0,
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BrebV1Adapter,
         { provide: BREB_HTTP2_CLIENT_V1, useValue: brebClient },
-        { provide: 'MetricsService', useValue: metricsService as MetricsServicePort },
+        {
+          provide: 'MetricsService',
+          useValue: metricsService satisfies MetricsServicePort,
+        },
       ],
     }).compile();
 
@@ -99,5 +111,23 @@ describe('BrebV1Adapter', () => {
     brebClient.postJson.mockRejectedValue(new Error('Network error'));
 
     await expect(adapter.sendTransfer(mockTransaction)).rejects.toThrow();
+  });
+
+  it('should return raw payload from getTransferById', async () => {
+    const payload = { id: 'tx-1', status: 'CONFIRMED' };
+    brebClient.getJson.mockResolvedValue(payload);
+
+    const result = await adapter.getTransferById('tx-1');
+
+    expect(brebClient.getJson).toHaveBeenCalledWith('tx-1');
+    expect(result).toEqual(payload);
+    expect(metricsService.increment).toHaveBeenCalledWith('breb_calls');
+  });
+
+  it('should increment breb_errors when getTransferById fails', async () => {
+    brebClient.getJson.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    await expect(adapter.getTransferById('tx-1')).rejects.toThrow();
+    expect(metricsService.increment).toHaveBeenCalledWith('breb_errors');
   });
 });

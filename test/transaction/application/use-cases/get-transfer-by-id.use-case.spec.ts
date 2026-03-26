@@ -1,7 +1,7 @@
-import { GetTransferByIdUseCase } from '../../../src/transaction/application/use-cases/get-transfer-by-id.use-case';
-import { Transaction } from '../../../src/transaction/domain/entity/transaction.entity';
-import { TransactionStatus } from '../../../src/transaction/domain/transaction-status.enum';
-import type { TransactionRepository } from '../../../src/transaction/domain/providers/transaction.repository';
+import { GetTransferByIdUseCase } from 'src/transaction/application/use-cases/get-transfer-by-id.use-case';
+import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
+import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
+import type { TransactionRepository } from 'src/transaction/domain/providers/transaction.repository';
 
 describe('GetTransferByIdUseCase', () => {
   let useCase: GetTransferByIdUseCase;
@@ -21,7 +21,9 @@ describe('GetTransferByIdUseCase', () => {
   );
 
   beforeEach(() => {
-    transactionRepository = { findById: jest.fn().mockResolvedValue(mockTransaction) };
+    transactionRepository = {
+      findById: jest.fn().mockResolvedValue(mockTransaction),
+    };
     useCase = new GetTransferByIdUseCase(
       transactionRepository as unknown as TransactionRepository,
     );

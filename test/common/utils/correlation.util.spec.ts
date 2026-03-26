@@ -1,7 +1,9 @@
 import {
   getCorrelationId,
+  getIdempotencyKey,
   runWithCorrelationId,
   setCorrelationId,
+  setIdempotencyKey,
 } from '../../../src/common/utils/correlation.util';
 
 describe('correlation.util', () => {
@@ -24,5 +26,14 @@ describe('correlation.util', () => {
       setCorrelationId('updated');
       expect(getCorrelationId()).toBe('updated');
     });
+  });
+
+  it('stores idempotency key inside the same async context', async () => {
+    await runWithCorrelationId('corr-1', async () => {
+      expect(getIdempotencyKey()).toBeUndefined();
+      setIdempotencyKey('idem-123');
+      expect(getIdempotencyKey()).toBe('idem-123');
+    });
+    expect(getIdempotencyKey()).toBeUndefined();
   });
 });

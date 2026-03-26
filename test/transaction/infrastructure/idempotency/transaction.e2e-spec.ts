@@ -3,15 +3,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import type { Server } from 'http';
 import request from 'supertest';
-import { TransactionController } from '../../../src/transaction/infrastructure/entrypoints/controller/transaction.controller';
-import { CreateTransferUseCase } from '../../../src/transaction/application/use-cases/create-transfer.use-case';
-import { GetTransferByIdUseCase } from '../../../src/transaction/application/use-cases/get-transfer-by-id.use-case';
-import { Transaction } from '../../../src/transaction/domain/entity/transaction.entity';
-import { TransactionStatus } from '../../../src/transaction/domain/transaction-status.enum';
-import type { CreateTransferResponse } from '../../../src/transaction/infrastructure/entrypoints/model/create-transfer.response';
-import type { IdempotencyService } from '../../../src/transaction/domain/providers/idempotency.service';
-import type { TransactionRepository } from '../../../src/transaction/domain/providers/transaction.repository';
-import type { MetricsServicePort } from '../../../src/metrics/domain/providers/metrics.service.provider';
+import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
+import { CreateTransferUseCase } from 'src/transaction/application/use-cases/create-transfer.use-case';
+import { GetTransferByIdUseCase } from 'src/transaction/application/use-cases/get-transfer-by-id.use-case';
+import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
+import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
+import type { IdempotencyService } from 'src/transaction/domain/providers/idempotency.service';
+import type { TransactionRepository } from 'src/transaction/domain/providers/transaction.repository';
+import { TransactionController } from 'src/transaction/infrastructure/entrypoints/controller/transaction.controller';
+import type { CreateTransferResponse } from 'src/transaction/infrastructure/entrypoints/model/create-transfer.response';
 
 /** In-memory idempotency for e2e: same key + same hash → cached response; same key + different hash → 409. */
 function createMockIdempotencyService(): IdempotencyService {
@@ -63,7 +63,12 @@ describe('TransactionController (e2e)', () => {
   };
   const mockMetricsService: MetricsServicePort = {
     increment: jest.fn().mockResolvedValue(undefined),
-    getMetrics: jest.fn(),
+    getMetrics: jest.fn().mockResolvedValue({
+      transfer_created: 0,
+      transfer_failed: 0,
+      breb_calls: 0,
+      breb_errors: 0,
+    }),
   };
 
   beforeAll(async () => {

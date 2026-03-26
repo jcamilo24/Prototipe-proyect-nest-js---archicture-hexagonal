@@ -1,12 +1,12 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
-import { TransactionController } from '../../../../src/transaction/infrastructure/entrypoints/controller/transaction.controller';
-import { CreateTransferUseCase } from '../../../../src/transaction/application/use-cases/create-transfer.use-case';
-import { GetTransferByIdUseCase } from '../../../../src/transaction/application/use-cases/get-transfer-by-id.use-case';
-import { Transaction } from '../../../../src/transaction/domain/entity/transaction.entity';
-import { TransactionStatus } from '../../../../src/transaction/domain/transaction-status.enum';
-import type { CreateTransferResponse } from '../../../../src/transaction/infrastructure/entrypoints/model/create-transfer.response';
+import { Test, TestingModule } from '@nestjs/testing';
 import type { FastifyReply } from 'fastify';
+import { CreateTransferUseCase } from 'src/transaction/application/use-cases/create-transfer.use-case';
+import { GetTransferByIdUseCase } from 'src/transaction/application/use-cases/get-transfer-by-id.use-case';
+import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
+import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
+import { TransactionController } from 'src/transaction/infrastructure/entrypoints/controller/transaction.controller';
+import type { CreateTransferResponse } from 'src/transaction/infrastructure/entrypoints/model/create-transfer.response';
 
 describe('TransactionController', () => {
   let controller: TransactionController;

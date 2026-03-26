@@ -23,7 +23,7 @@ import { generateRequestHash } from 'src/common/utils/hash.util';
 import { GetTransferResponse } from '../model/get-transfer.response';
 import { GetTransferByIdUseCase } from '../../../application/use-cases/get-transfer-by-id.use-case';
 import { mapTransactionToGetResponse } from './transaction-request.mapper';
-import { getCorrelationId } from 'src/common/utils/correlation.util';
+import { getCorrelationId, setIdempotencyKey } from 'src/common/utils/correlation.util';
 
 @Controller('transactions')
 export class TransactionController {
@@ -49,6 +49,8 @@ export class TransactionController {
     if (!idempotencyKey) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
+
+    setIdempotencyKey(idempotencyKey);
 
     const requestHash = generateRequestHash(body);
     const response =

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as http2 from 'node:http2';
-import { getCorrelationId } from 'src/common/utils/correlation.util';
+import { getCorrelationId, getIdempotencyKey } from 'src/common/utils/correlation.util';
 import {
   createBrebHttpCircuitBreaker,
   type BrebHttpCircuitBreakerInstance,
@@ -116,6 +116,10 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
         ':authority': authority,
         'x-correlation-id': getCorrelationId() ?? '',
       };
+      const idempotencyKey = getIdempotencyKey();
+      if (idempotencyKey) {
+        headers['idempotency-key'] = idempotencyKey;
+      }
       if (body) {
         headers['content-type'] = 'application/json';
         headers['content-length'] = Buffer.byteLength(body, 'utf8').toString();

@@ -1,6 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RedisIdempotencyService } from './redis-idempotency.service';
+import { RedisIdempotencyService } from 'src/transaction/infrastructure/idempotency/redis-idempotency.service';
 
 describe('RedisIdempotencyService', () => {
   let service: RedisIdempotencyService;

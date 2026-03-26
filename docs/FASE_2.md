@@ -70,7 +70,7 @@ Lo que no conviene es que el controller conozca esa implementación concreta; po
 
 ### E2E de idempotencia
 
-- **Ubicación:** `test/infrastructure/idempotency/transaction.e2e-spec.ts`.
+- **Ubicación:** `test/transaction/infrastructure/idempotency/transaction.e2e-spec.ts`.
 - **Setup:** El módulo de test inyecta un **mock de `IdempotencyService`** en memoria (misma lógica que Redis: misma key + mismo hash → respuesta cacheada; misma key + distinto body → 409). No se usa Redis en e2e.
 - **Casos cubiertos:**
   - Mismo body y mismo `Idempotency-Key` dos veces → 201 en ambos, misma respuesta, **una sola** llamada al use case / external / repository.
@@ -489,3 +489,63 @@ Fuera de `breb/` siguen otros recursos HTTP genéricos, por ejemplo **`http/inte
 ### Mock / servicio BREB (fuera del core)
 
 Para probar v2 en local, el mock BREB debe exponer las mismas operaciones (POST/GET) bajo **`/payments`** con el mismo cuerpo/respuesta esperado por el mapper, o el mock debe adaptarse. El core solo cambia el **prefijo** de la URL; no implementa la lógica del otro servicio.
+
+---
+
+## Requerimiento 8: Tests reales (cobertura e integración BREB)
+
+**Objetivo del requerimiento:** (1) Mantener **al menos ~80% de cobertura** en tests unitarios sobre **casos de uso** de transacciones y la **capa adapter BREB** (v1, v2 y la base compartida). (2) Tener **un test de integración** que ejecute el flujo **crear transferencia → llamada HTTP/2 real a un “mock BREB”** (servidor embebido en el test que habla el mismo contrato que BREB), sin sustituir el cliente HTTP por mocks.
+
+### Desglose
+
+| Pieza | Qué significa | Cómo se cumple en el repo |
+|--------|----------------|---------------------------|
+| **Unit tests — use cases** | Cobertura de líneas/ramas/funciones en `CreateTransferUseCase` y `GetTransferByIdUseCase` (lógica de aplicación aislada con repos y `ExternalTransferService` mockeados). | Specs en `test/transaction/application/use-cases/*.spec.ts`; casos felices y de error (fallo externo, fallo persistencia, re-lanzamiento de `HttpException`). |
+| **Unit tests — adapters** | Cobertura en los adapters HTTP BREB: clases finas en `v1/` y `v2/` más la lógica compartida en `breb-service.base.ts` (`sendTransfer`, `getTransferById`, métricas y errores). | `test/transaction/infrastructure/providers/http/breb/v1/breb-v1.adapter.spec.ts`, `.../v2/breb-v2.adapter.spec.ts`. |
+| **Cobertura global (`All files`)** | El informe de Jest incluye todo `src/` salvo entradas puramente de cableado. | `collectCoverageFrom` excluye `src/main.ts` y `src/**/*.module.ts` (bootstrap y módulos Nest sin lógica testeable unitaria); el resto se cubre con specs alineados a `src/` (config, métricas, persistencia, BREB shared, interceptor, etc.). Con las suites actuales la línea global suele situarse **≥ ~80%** en líneas. |
+| **Umbral 80% (rutas críticas)** | Jest falla `npm run test:cov` si esas rutas bajan del mínimo acordado. | `coverageThreshold` en `package.json` para `src/transaction/application/use-cases/**/*.ts`, `.../breb/v1/**/*.ts`, `.../breb/v2/**/*.ts` y `.../breb/shared/breb-service.base.ts`. |
+| **Integración transfer → mock BREB** | Un test que atraviese caso de uso + adapter + **cliente `BrebHttp2ClientImpl`** contra un proceso que responde como BREB. | `test/integration/transfer-breb.integration-spec.ts`: levanta un `http2.createServer` local en puerto aleatorio, responde `POST /transfer` con JSON válido para el mapper; ejecuta `CreateTransferUseCase` con `BrebV1Adapter` y repositorio en memoria. No hace falta levantar el mock BREB externo para CI; el “mock” es el servidor HTTP/2 del propio test. |
+
+### Estructura de `test/` (alineada a `src/`)
+
+Los unit tests viven bajo `test/` siguiendo el mismo árbol que el código de producción: por ejemplo `test/transaction/application/use-cases/`, `test/transaction/infrastructure/providers/http/breb/...`, `test/config/mongo/`, `test/metrics/infrastructure/...`. Lo compartido transversal sigue en `test/common/`. E2E e integración permanecen en `test/*.e2e-spec.ts`, `test/transaction/infrastructure/idempotency/*.e2e-spec.ts` y `test/integration/*.integration-spec.ts`.
+
+### Comandos
+
+- **Unit tests + cobertura (con umbrales):** `npm run test:cov`
+- **E2E (HTTP sobre app de prueba):** `npm run test:e2e` (config `test/jest-e2e.json`; archivos `*.e2e-spec.ts`)
+- **Solo integración BREB:** `npm run test:integration` (config `test/jest-integration.json`; los `*.integration-spec.ts` están excluidos del `jest` unitario por `testPathIgnorePatterns`).
+
+Para ejecutar **las tres tandas en secuencia** (lo habitual antes de un PR o una demo):
+
+```bash
+npm run test:cov && npm run test:e2e && npm run test:integration
+```
+
+Métrica	Porcentaje
+Statements (% Stmts)	81,39%
+Branches (% Branch)	73,31%
+Functions (% Funcs)	67,44%
+Lines (% Lines)	82,38%
+
+Si los tres comandos terminan con código de salida **0** y ves **PASS** en cada suite, **no hay errores de prueba**: todo lo que fallaría aparecería como **FAIL** y Jest devolvería un código distinto de cero.
+
+### Cómo leer la salida (qué es cada cosa)
+
+| Qué ves en consola | Qué significa |
+|--------------------|----------------|
+| **`PASS test/.../*.spec.ts`** | Ese archivo de tests **pasó**. El orden de ejecución puede variar; lo importante es el resumen final de cada comando. |
+| **`Test Suites: N passed`** / **`Tests: M passed`** | Resumen del comando actual: **N** archivos de test y **M** casos ejecutados con éxito. Si hubiera fallos, aparecería `failed` y el detalle del caso. |
+| **`[Nest] ... ERROR`** | Mensaje del **logger de Nest** dentro del código bajo prueba. En muchos specs es **esperado** (por ejemplo el adapter BREB que prueba respuestas inválidas o red caída). **No** indica que Jest haya fallado si la línea anterior o posterior dice **PASS**. |
+| **`[Nest] ... WARN`** | Igual: avisos de lógica (idempotencia conflict, métricas con Redis mockeado que falla a propósito, etc.). |
+| **`[Nest] ... DEBUG` / `LOG`** | Trazas normales del flujo (casos de uso, repositorio, idempotencia). |
+| **Tabla `% Stmts` / `% Lines` / `All files`** | Informe de **cobertura** solo en `npm run test:cov`. Indica qué porcentaje del código incluido en `collectCoverageFrom` se ejecutó al menos una vez. Valores bajos en **`breb-http2.client.ts`** en unitarios son normales: ese cliente se ejerce en el **test de integración** HTTP/2, no en todos los unit tests. |
+| **`Running coverage on untested files...`** | Mensaje de Istanbul/Jest mientras termina de instrumentar; a veces se mezcla con logs de tests que aún escriben en consola. |
+| **`Force exiting Jest: Have you considered using --detectOpenHandles`** | **Aviso** de Jest porque en `jest-e2e.json` e `jest-integration.json` está `forceExit: true`. No es un fallo; solo sugiere depurar handles abiertos si algún día quisieras quitar `forceExit`. |
+
+### Preguntas frecuentes (cómo explicarlo en una revisión)
+
+- **¿Cómo hicieron las pruebas?** — Unitarios con Jest + `@nestjs/testing` (mocks de repositorio, BREB, Redis, métricas), e2e con `supertest` sobre una app Nest mínima en memoria, e integración con un servidor HTTP/2 embebido que simula BREB.
+- **¿Eso que dice ERROR es que algo está mal?** — No, si el test **PASS**: son logs del dominio simulando errores (BREB inválido, conflicto de idempotencia, etc.).
+- **¿Hay errores reales?** — Solo si aparece **FAIL**, un stack trace de expectativa (`Expected ... Received ...`) o el comando termina con **exit code ≠ 0**.
+- **¿Por qué “All files” ~80% y no 100%?** — Se excluyen `main` y módulos `.module.ts` del cómputo; además no todo el código tiene el mismo peso (p. ej. cliente HTTP/2 muy cubierto en integración). Los **umbrales obligatorios** están en use cases y adapters BREB vía `coverageThreshold`.

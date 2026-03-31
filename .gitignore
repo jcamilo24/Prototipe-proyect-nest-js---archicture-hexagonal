@@ -15,6 +15,9 @@ lerna-debug.log*
 # OS
 .DS_Store
 
+# Scripts locales
+scripts/concurrency-output-*.json
+
 # Tests
 /coverage
 /.nyc_output

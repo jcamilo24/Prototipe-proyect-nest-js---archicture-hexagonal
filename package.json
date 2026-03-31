@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:integration": "jest --config ./test/jest-integration.json",
     "mock:breb": "node scripts/mock-breb.js",
-    "breb:api": "cd breb-mock-api && npm start"
+    "breb:api": "cd breb-mock-api && npm start",
+    "test:concurrency": "node scripts/concurrency-test.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

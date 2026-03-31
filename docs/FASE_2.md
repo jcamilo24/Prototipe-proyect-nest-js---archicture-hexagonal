@@ -432,6 +432,7 @@ Este enum es la única fuente de verdad para los estados de una transacción en 
 
 - Para resetear métricas manualmente, basta limpiar la clave Redis (`metrics:counters` o la definida en `METRICS_REDIS_KEY`).
 - Esta solución ya da persistencia basica; si luego quieres observabilidad completa (históricos, dashboards y alertas), el siguiente paso natural es exportar a Prometheus/OpenTelemetry.
+- **Vaciar Redis en local (idempotencia + métricas):** sin `redis-cli` en el host, usar el binario dentro del contenedor: `docker exec -it core_api_redis redis-cli FLUSHDB`. Alternativa: `brew install redis` y luego `redis-cli -h localhost -p 6379 ...`. Ver también **Requerimiento 9** para borrado selectivo.
 
 ---
 
@@ -549,3 +550,29 @@ Si los tres comandos terminan con código de salida **0** y ves **PASS** en cada
 - **¿Eso que dice ERROR es que algo está mal?** — No, si el test **PASS**: son logs del dominio simulando errores (BREB inválido, conflicto de idempotencia, etc.).
 - **¿Hay errores reales?** — Solo si aparece **FAIL**, un stack trace de expectativa (`Expected ... Received ...`) o el comando termina con **exit code ≠ 0**.
 - **¿Por qué “All files” ~80% y no 100%?** — Se excluyen `main` y módulos `.module.ts` del cómputo; además no todo el código tiene el mismo peso (p. ej. cliente HTTP/2 muy cubierto en integración). Los **umbrales obligatorios** están en use cases y adapters BREB vía `coverageThreshold`.
+
+---
+
+## Requerimiento 9: Concurrencia (pruebas y lecciones operativas)
+
+**Contexto:** Las pruebas de concurrencia aquí son principalmente **manuales o con scripts** (no sustituyen los tests automatizados del Requerimiento 8). Sirven para ver comportamiento bajo **muchas peticiones en paralelo** hacia `POST /transactions/transfer`, con Redis, Mongo y BREB reales o mock.
+
+### Qué pruebas puedes hacer
+
+| Prueba | Qué configurar | Qué observar |
+|--------|----------------|--------------|
+| **Carga “feliz”** | N peticiones en paralelo (p. ej. 100) con **`Idempotency-Key` distinta por petición** (`key-${i}` o `key-${Date.now()}-${i}` para no chocar con Redis de corridas anteriores) y **`transaction.id` distinto por petición** (`tx-${i}`). | `Resumen HTTP` con muchos **201**; en Mongo N documentos en `transactions`; `GET /metrics` con `transfer_created` y `breb_calls` coherentes. |
+| **Mismo id hacia BREB** | Varias peticiones concurrentes con el **mismo `transaction.id`** (mismo body salvo que el mock/BREB rechace duplicados). | El upstream puede responder **409** (conflicto / duplicado). La API lo expone como **502** con mensaje tipo `external service rejected request (409)`. No confundir con idempotencia de la API. |
+| **Idempotencia: misma key, mismo body** | Dos ráfagas o dos envíos con la **misma** `Idempotency-Key` y **el mismo** JSON. | Segunda respuesta debe coincidir con la primera; el flujo de negocio no debe ejecutarse dos veces (comprobar logs o contadores). |
+| **Idempotencia: misma key, distinto body** | Misma key en peticiones con **cuerpos distintos** (p. ej. mismo header, distinto `transaction.id`). | **409 Conflict** en la API: `Idempotency-Key reused with different payload`. |
+| **Redis vs Mongo** | Borrar solo la colección `transactions` en Mongo y repetir peticiones con las **mismas** keys de idempotencia que ya usaste. | Puede “parecer éxito” (201 cacheado) **sin** nuevos inserts: la respuesta sale de **Redis**, no se vuelve a persistir. Para un estado limpio, borrar claves `idempotency:*` o usar keys nuevas por corrida. |
+| **Circuit breaker BREB** | Muchos fallos seguidos contra BREB (timeouts, 409 masivos, etc.). | Tras superar el umbral configurado (`BREB_CIRCUIT_*`), respuestas **500** con error tipo **Breaker is open**: el core deja de llamar al upstream durante el tiempo de apertura. |
+| **Herramientas** | Script `scripts/concurrency-test.ts` (`npm run test:concurrency`): resumen HTTP, JSON de salida y `CONCURRENCY_VERBOSE=1` para volcar en consola. | Alternativas: autocannon, k6, Apache Bench; subir carga de a poco (10 → 50 → 100). |
+
+### Lo más importante que conviene tener claro (antes de exigir concurrencia “de verdad”)
+
+1. **`Promise.allSettled` / `fetch` “fulfilled” no es éxito de negocio.** Hay que mirar **`status` HTTP** (201 vs 409 vs 502 vs 500) y el cuerpo; por eso el script registra `res.status` y el JSON de error.
+2. **Idempotencia vive en Redis** (`IDEMPOTENCY_KEY_PREFIX`, por defecto claves `idempotency:<key>`). **Vaciar Mongo no borra** respuestas cacheadas; las métricas están en otro hash (`metrics:counters` o `METRICS_REDIS_KEY`).
+3. **409 de idempotencia (API)** vs **409 del BREB (upstream):** el primero es conflicto de **misma key + distinto payload** en el controller. El segundo llega como fallo del cliente HTTP y el mapper traduce **4xx del upstream a 502 Bad Gateway** para el cliente del core (`http-client-error.mapper.ts`).
+4. **Mismo `transaction.id` en muchas peticiones paralelas** puede disparar **409 en BREB** y luego **apertura del circuit breaker**; no es un fallo del script de concurrencia, es presión sobre las reglas del mock/servicio externo.
+5. **Reset local rápido:** `docker exec -it core_api_redis redis-cli FLUSHDB` vacía idempotencia y métricas en esa base Redis; para solo métricas, `DEL metrics:counters`; para solo idempotencia, borrar patrones `idempotency:*` (ver notas del Requerimiento 6 en este mismo documento).

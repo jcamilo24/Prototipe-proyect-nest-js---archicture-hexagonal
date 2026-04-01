@@ -1,0 +1,18 @@
+# Scrape de métricas de la API.
+#
+# Modo A — API en tu Mac (npm run start:dev) y solo mongo/redis/prometheus en Docker:
+#   usa host.docker.internal (Docker Desktop Mac/Windows).
+#
+# Modo B — API también en Docker (docker compose up con servicio app):
+#   cambia el target a: app:3000
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: core_api
+    metrics_path: /metrics/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:3000

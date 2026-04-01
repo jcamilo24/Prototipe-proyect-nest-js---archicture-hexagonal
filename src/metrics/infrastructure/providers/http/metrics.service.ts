@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { MetricsServicePort } from '../../../domain/providers/metrics.service.provider';
+import { PrometheusMetrics } from '../../prometheus/prometheus.metrics';
 
 @Injectable()
 export class MetricsService implements MetricsServicePort {
@@ -12,6 +13,7 @@ export class MetricsService implements MetricsServicePort {
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis,
     private readonly configService: ConfigService,
+    private readonly PrometheusMetrics: PrometheusMetrics,
   ) {
     this.redisKey = this.configService.get<string>('METRICS_REDIS_KEY') ?? 'metrics:counters';
   }
@@ -21,6 +23,7 @@ export class MetricsService implements MetricsServicePort {
   ): Promise<void> {
     try {
       await this.redis.hincrby(this.redisKey, metric, 1);
+      this.PrometheusMetrics.recordAfterRedisOk(metric);
     } catch (err) {
       this.logger.warn(`Failed to increment metric ${metric}: ${String(err)}`);
     }

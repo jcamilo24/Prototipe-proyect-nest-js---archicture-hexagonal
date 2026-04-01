@@ -45,6 +45,19 @@ services:
     volumes:
       - redis_data:/data
 
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: core_api_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    # No depends_on app: suele levantarse solo mongo+redis y la API con npm en el host.
+    # El scrape usa host.docker.internal:3000 (ver observability/prometheus.yml).
+
 volumes:
   mongo_data:
   redis_data:

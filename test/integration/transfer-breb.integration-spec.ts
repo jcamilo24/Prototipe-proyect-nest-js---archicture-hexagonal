@@ -5,7 +5,7 @@ import {
   runWithCorrelationId,
   setIdempotencyKey,
 } from '../../src/common/utils/correlation.util';
-import { BrebHttp2ClientImpl } from '../../src/transaction/infrastructure/providers/http/breb/client/breb-http2.client';
+import { BrebHttp2ClientImpl } from '../../src/transaction/infrastructure/providers/http/client/http2.client';
 import { BrebV1Adapter } from '../../src/transaction/infrastructure/providers/http/breb/v1/breb-v1.adapter';
 import { CreateTransferUseCase } from '../../src/transaction/application/use-cases/create-transfer.use-case';
 import { Transaction } from '../../src/transaction/domain/entity/transaction.entity';
@@ -109,9 +109,16 @@ describe('Integration: transfer → mock BREB (HTTP/2)', () => {
       findById: jest.fn(),
     };
 
+    const noopV2 = {
+      sendTransfer: jest.fn().mockRejectedValue(
+        new Error('v2 adapter must not be used in this test'),
+      ),
+    };
+
     const useCase = new CreateTransferUseCase(
       repository,
       adapter,
+      noopV2 as never,
       metrics,
     );
 
@@ -130,7 +137,7 @@ describe('Integration: transfer → mock BREB (HTTP/2)', () => {
 
     const result = await runWithCorrelationId('corr-int-1', async () => {
       setIdempotencyKey('idem-int-1');
-      return useCase.execute(transaction);
+      return useCase.execute(transaction, 'v1');
     });
 
     expect(result.transaction.status).toBe(TransactionStatus.CONFIRMED);

@@ -8,6 +8,7 @@ import {
   Logger,
   Param,
   Post,
+  Query,
   Res,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
@@ -20,7 +21,6 @@ import {
   mapResultToResponse,
 } from './transaction-request.mapper';
 import { generateRequestHash } from 'src/common/utils/hash.util';
-import { GetTransferResponse } from '../model/get-transfer.response';
 import { GetTransferByIdUseCase } from '../../../application/use-cases/get-transfer-by-id.use-case';
 import { mapTransactionToGetResponse } from './transaction-request.mapper';
 import { getCorrelationId, setIdempotencyKey } from 'src/common/utils/correlation.util';
@@ -36,14 +36,15 @@ export class TransactionController {
     private readonly getTransferByIdUseCase: GetTransferByIdUseCase,
   ) {}
 
-  @Post('/transfer')
+  @Post('transfer')
   async create(
+    @Query('brebVersion') brebVersion: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string,
     @Body() body: CreateTransferRequest,
   ): Promise<CreateTransferResponse> {
     const transactionId = body?.transaction?.id;
     this.logger.log(
-      `Request received | correlationId=${getCorrelationId() ?? '-'} idempotencyKey=${idempotencyKey} transactionId=${transactionId}`,
+      `Request received | correlationId=${getCorrelationId() ?? '-'} brebVersion=${brebVersion || '(default v1)'} idempotencyKey=${idempotencyKey} transactionId=${transactionId}`,
     );
 
     if (!idempotencyKey) {
@@ -59,7 +60,10 @@ export class TransactionController {
         requestHash,
         async () => {
           const transaction = mapRequestToEntity(body);
-          const result = await this.createTransferUseCase.execute(transaction);
+          const result = await this.createTransferUseCase.execute(
+            transaction,
+            brebVersion ?? '',
+          );
           return mapResultToResponse(result);
         },
       );
@@ -69,6 +73,7 @@ export class TransactionController {
     );
     return response;
   }
+
 
   @Get('/:id')
   async getTransferById(

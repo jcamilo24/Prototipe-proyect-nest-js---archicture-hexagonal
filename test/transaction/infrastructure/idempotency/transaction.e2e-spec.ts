@@ -52,12 +52,21 @@ describe('TransactionController (e2e)', () => {
     findById: jest.fn().mockResolvedValue(null),
   };
 
-  const mockExternalTransferService = {
+  const mockExternalTransferV1 = {
     sendTransfer: jest.fn().mockResolvedValue({
       externalId: 'e2e-end-to-end-id',
       status: TransactionStatus.CONFIRMED,
       traceId: 'e2e-trace-id',
       qrCodeId: 'e2e-qr-code',
+      eventDate: '2025-02-27T12:00:00Z',
+    }),
+  };
+  const mockExternalTransferV2 = {
+    sendTransfer: jest.fn().mockResolvedValue({
+      externalId: 'e2e-v2-end-to-end-id',
+      status: TransactionStatus.CONFIRMED,
+      traceId: 'e2e-v2-trace-id',
+      qrCodeId: 'e2e-v2-qr-code',
       eventDate: '2025-02-27T12:00:00Z',
     }),
   };
@@ -80,15 +89,22 @@ describe('TransactionController (e2e)', () => {
           provide: CreateTransferUseCase,
           useFactory: (
             transactionRepository: TransactionRepository,
-            externalTransferService: typeof mockExternalTransferService,
+            v1: typeof mockExternalTransferV1,
+            v2: typeof mockExternalTransferV2,
             metricsService: MetricsServicePort,
           ) =>
             new CreateTransferUseCase(
               transactionRepository,
-              externalTransferService as never,
+              v1 as never,
+              v2 as never,
               metricsService,
             ),
-          inject: ['TransactionRepository', 'ExternalTransferService', 'MetricsService'],
+          inject: [
+            'TransactionRepository',
+            'ExternalTransferV1',
+            'ExternalTransferV2',
+            'MetricsService',
+          ],
         },
         {
           provide: GetTransferByIdUseCase,
@@ -105,8 +121,12 @@ describe('TransactionController (e2e)', () => {
           useValue: mockTransactionRepository,
         },
         {
-          provide: 'ExternalTransferService',
-          useValue: mockExternalTransferService,
+          provide: 'ExternalTransferV1',
+          useValue: mockExternalTransferV1,
+        },
+        {
+          provide: 'ExternalTransferV2',
+          useValue: mockExternalTransferV2,
         },
         {
           provide: 'MetricsService',
@@ -125,17 +145,24 @@ describe('TransactionController (e2e)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockExternalTransferService.sendTransfer.mockResolvedValue({
+    mockExternalTransferV1.sendTransfer.mockResolvedValue({
       externalId: 'e2e-end-to-end-id',
       status: TransactionStatus.CONFIRMED,
       traceId: 'e2e-trace-id',
       qrCodeId: 'e2e-qr-code',
       eventDate: '2025-02-27T12:00:00Z',
     });
+    mockExternalTransferV2.sendTransfer.mockResolvedValue({
+      externalId: 'e2e-v2-end-to-end-id',
+      status: TransactionStatus.CONFIRMED,
+      traceId: 'e2e-v2-trace-id',
+      qrCodeId: 'e2e-v2-qr-code',
+      eventDate: '2025-02-27T12:00:00Z',
+    });
     mockTransactionRepository.findById.mockResolvedValue(null);
   });
 
-  it('POST /transactions/transfer - returns 200 and response body with id, status, endToEndId, properties', () => {
+  it('POST /transactions/transfer - returns 201 and response body with id, status, endToEndId, properties (default v1)', () => {
     const body = {
       transaction: {
         id: 'tx-e2e-001',
@@ -175,7 +202,7 @@ describe('TransactionController (e2e)', () => {
         expect(responseBody.properties).toHaveProperty('traceId');
       })
       .then(() => {
-        expect(mockExternalTransferService.sendTransfer).toHaveBeenCalledTimes(
+        expect(mockExternalTransferV1.sendTransfer).toHaveBeenCalledTimes(
           1,
         );
         expect(mockTransactionRepository.save).toHaveBeenCalledTimes(1);
@@ -209,7 +236,7 @@ describe('TransactionController (e2e)', () => {
       .send(body)
       .expect(201)
       .then(() => {
-        expect(mockExternalTransferService.sendTransfer).toHaveBeenCalledWith(
+        expect(mockExternalTransferV1.sendTransfer).toHaveBeenCalledWith(
           expect.objectContaining({
             id: 'tx-e2e-002',
             amount: 100000,
@@ -261,7 +288,7 @@ describe('TransactionController (e2e)', () => {
       status: TransactionStatus.CONFIRMED,
       endToEndId: 'e2e-end-to-end-id',
     });
-    expect(mockExternalTransferService.sendTransfer).toHaveBeenCalledTimes(1);
+    expect(mockExternalTransferV1.sendTransfer).toHaveBeenCalledTimes(1);
     expect(mockTransactionRepository.save).toHaveBeenCalledTimes(1);
   });
 
@@ -311,6 +338,66 @@ describe('TransactionController (e2e)', () => {
       .set(IDEMPOTENCY_HEADER, key)
       .send(body2)
       .expect(409);
+  });
+
+  it('POST /transactions/transfer?brebVersion=v2 - uses v2 external adapter', () => {
+    const body = {
+      transaction: {
+        id: 'tx-e2e-v2',
+        amount: 1,
+        currency: 'USD',
+        description: 'V2 query',
+        receiver: {
+          document: '1',
+          documentType: 'CC',
+          name: 'V2',
+          account: '1',
+          accountType: 'Ahorros',
+        },
+      },
+    };
+
+    const server = app.getHttpServer() as unknown as Server;
+
+    return request(server)
+      .post('/transactions/transfer')
+      .query({ brebVersion: 'v2' })
+      .set(IDEMPOTENCY_HEADER, 'e2e-key-v2')
+      .send(body)
+      .expect(201)
+      .then(() => {
+        expect(mockExternalTransferV2.sendTransfer).toHaveBeenCalledTimes(1);
+        expect(mockExternalTransferV1.sendTransfer).not.toHaveBeenCalled();
+      });
+  });
+
+  it('POST /transactions/transfer?brebVersion=v99 - unknown version falls back to v1 adapter', () => {
+    const server = app.getHttpServer() as unknown as Server;
+
+    return request(server)
+      .post('/transactions/transfer')
+      .query({ brebVersion: 'v99' })
+      .set(IDEMPOTENCY_HEADER, 'e2e-key-bad-version')
+      .send({
+        transaction: {
+          id: 'tx-bad-ver',
+          amount: 1,
+          currency: 'USD',
+          description: 'x',
+          receiver: {
+            document: '1',
+            documentType: 'CC',
+            name: 'X',
+            account: '1',
+            accountType: 'Ahorros',
+          },
+        },
+      })
+      .expect(201)
+      .then(() => {
+        expect(mockExternalTransferV1.sendTransfer).toHaveBeenCalledTimes(1);
+        expect(mockExternalTransferV2.sendTransfer).not.toHaveBeenCalled();
+      });
   });
 
   it('GET /transactions/:id - returns 200 and body when transfer exists', async () => {

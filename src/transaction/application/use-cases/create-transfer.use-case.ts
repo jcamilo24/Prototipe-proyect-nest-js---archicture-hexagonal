@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { resolveBrebApiVersion } from '../../domain/breb-api-version';
 import { Transaction } from '../../domain/entity/transaction.entity';
 import type { TransactionRepository } from '../../domain/providers/transaction.repository';
 import type {
@@ -19,16 +20,28 @@ export class CreateTransferUseCase {
 
   constructor(
     private readonly transactionRepository: TransactionRepository,
-    private readonly externalTransferService: ExternalTransferService,
+    private readonly externalTransferV1: ExternalTransferService,
+    private readonly externalTransferV2: ExternalTransferService,
     private readonly metricsService: MetricsServicePort,
   ) {}
 
-  async execute(transaction: Transaction): Promise<CreateTransferResult> {
+  async execute(
+    transaction: Transaction,
+    brebApiVersionRaw: string,
+  ): Promise<CreateTransferResult> {
+    const brebVersion = resolveBrebApiVersion(brebApiVersionRaw);
+    const externalTransferService =
+      brebVersion === 'v2'
+        ? this.externalTransferV2
+        : this.externalTransferV1;
+
     let externalResponse: ExternalTransferResult;
     try {
-      this.logger.debug(`Calling external transfer | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id}`);
+      this.logger.debug(
+        `Calling external transfer | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} brebVersion=${brebVersion}`,
+      );
       externalResponse =
-        await this.externalTransferService.sendTransfer(transaction);
+        await externalTransferService.sendTransfer(transaction);
       this.logger.log(
         `External transfer ok | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} status=${externalResponse.status} traceId=${externalResponse.traceId ?? '-'}`,
       );

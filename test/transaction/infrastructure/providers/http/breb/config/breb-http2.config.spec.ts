@@ -2,7 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   resolveBrebV1BaseUrl,
   resolveBrebV2BaseUrl,
-} from 'src/transaction/infrastructure/providers/http/breb/config/breb-http2.config';
+} from 'src/config/breb/breb-http2.config';
 
 describe('breb-http2.config', () => {
   describe('resolveBrebV1BaseUrl', () => {

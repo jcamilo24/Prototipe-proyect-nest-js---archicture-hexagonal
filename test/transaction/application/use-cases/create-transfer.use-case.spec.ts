@@ -12,7 +12,8 @@ import type { TransactionRepository } from 'src/transaction/domain/providers/tra
 describe('CreateTransferUseCase', () => {
   let useCase: CreateTransferUseCase;
   let transactionRepository: { save: jest.Mock };
-  let externalTransferService: { sendTransfer: jest.Mock };
+  let externalTransferV1: { sendTransfer: jest.Mock };
+  let externalTransferV2: { sendTransfer: jest.Mock };
   let metricsService: {
     increment: jest.Mock;
     getMetrics: jest.Mock;
@@ -41,7 +42,10 @@ describe('CreateTransferUseCase', () => {
 
   beforeEach(() => {
     transactionRepository = { save: jest.fn().mockResolvedValue(undefined) };
-    externalTransferService = {
+    externalTransferV1 = {
+      sendTransfer: jest.fn().mockResolvedValue(mockExternalResponse),
+    };
+    externalTransferV2 = {
       sendTransfer: jest.fn().mockResolvedValue(mockExternalResponse),
     };
     metricsService = {
@@ -55,7 +59,8 @@ describe('CreateTransferUseCase', () => {
     };
     useCase = new CreateTransferUseCase(
       transactionRepository as unknown as TransactionRepository,
-      externalTransferService as unknown as ExternalTransferService,
+      externalTransferV1 as unknown as ExternalTransferService,
+      externalTransferV2 as unknown as ExternalTransferService,
       metricsService satisfies MetricsServicePort,
     );
   });
@@ -77,12 +82,13 @@ describe('CreateTransferUseCase', () => {
       'Ahorros',
       TransactionStatus.CREATED,
     );
-    const result = await useCase.execute(transactionForTest);
+    const result = await useCase.execute(transactionForTest, 'v1');
 
-    expect(externalTransferService.sendTransfer).toHaveBeenCalledTimes(1);
-    expect(externalTransferService.sendTransfer).toHaveBeenCalledWith(
+    expect(externalTransferV1.sendTransfer).toHaveBeenCalledTimes(1);
+    expect(externalTransferV1.sendTransfer).toHaveBeenCalledWith(
       transactionForTest,
     );
+    expect(externalTransferV2.sendTransfer).not.toHaveBeenCalled();
     expect(transactionRepository.save).toHaveBeenCalledTimes(1);
     expect(transactionRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -94,8 +100,69 @@ describe('CreateTransferUseCase', () => {
     expect(result.externalResponse).toEqual(mockExternalResponse);
   });
 
+  it('should use v2 external service when brebVersion is v2', async () => {
+    const transactionForTest = new Transaction(
+      'tx-001',
+      100000,
+      'PESOS',
+      'Recarga',
+      '123456',
+      'CC',
+      'Juan Pérez',
+      '1234567890',
+      'Ahorros',
+      TransactionStatus.CREATED,
+    );
+    await useCase.execute(transactionForTest, 'v2');
+
+    expect(externalTransferV2.sendTransfer).toHaveBeenCalledWith(
+      transactionForTest,
+    );
+    expect(externalTransferV1.sendTransfer).not.toHaveBeenCalled();
+  });
+
+  it('should default to v1 external service when brebVersion is invalid', async () => {
+    const transactionForTest = new Transaction(
+      'tx-001',
+      100000,
+      'PESOS',
+      'Recarga',
+      '123456',
+      'CC',
+      'Juan Pérez',
+      '1234567890',
+      'Ahorros',
+      TransactionStatus.CREATED,
+    );
+    await useCase.execute(transactionForTest, 'v3');
+
+    expect(externalTransferV1.sendTransfer).toHaveBeenCalledWith(
+      transactionForTest,
+    );
+    expect(externalTransferV2.sendTransfer).not.toHaveBeenCalled();
+  });
+
+  it('should default to v1 when brebVersion is empty', async () => {
+    const transactionForTest = new Transaction(
+      'tx-001',
+      100000,
+      'PESOS',
+      'Recarga',
+      '123456',
+      'CC',
+      'Juan Pérez',
+      '1234567890',
+      'Ahorros',
+      TransactionStatus.CREATED,
+    );
+    await useCase.execute(transactionForTest, '');
+
+    expect(externalTransferV1.sendTransfer).toHaveBeenCalledTimes(1);
+    expect(externalTransferV2.sendTransfer).not.toHaveBeenCalled();
+  });
+
   it('should return transaction with updated status from external response', async () => {
-    externalTransferService.sendTransfer.mockResolvedValue({
+    externalTransferV1.sendTransfer.mockResolvedValue({
       ...mockExternalResponse,
       status: TransactionStatus.CONFIRMED,
     });
@@ -112,7 +179,7 @@ describe('CreateTransferUseCase', () => {
       'Ahorros',
       TransactionStatus.CREATED,
     );
-    const result = await useCase.execute(transactionForTest);
+    const result = await useCase.execute(transactionForTest, 'v1');
 
     expect(result.transaction.status).toBe(TransactionStatus.CONFIRMED);
     expect(transactionRepository.save).toHaveBeenCalledWith(
@@ -122,7 +189,7 @@ describe('CreateTransferUseCase', () => {
 
   it('should rethrow HttpException from external service and increment transfer_failed', async () => {
     const ex = new BadGatewayException('upstream');
-    externalTransferService.sendTransfer.mockRejectedValue(ex);
+    externalTransferV1.sendTransfer.mockRejectedValue(ex);
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
@@ -136,13 +203,13 @@ describe('CreateTransferUseCase', () => {
       TransactionStatus.CREATED,
     );
 
-    await expect(useCase.execute(transactionForTest)).rejects.toBe(ex);
+    await expect(useCase.execute(transactionForTest, 'v1')).rejects.toBe(ex);
     expect(metricsService.increment).toHaveBeenCalledWith('transfer_failed');
     expect(transactionRepository.save).not.toHaveBeenCalled();
   });
 
   it('should wrap non-Http errors from external service', async () => {
-    externalTransferService.sendTransfer.mockRejectedValue(new Error('boom'));
+    externalTransferV1.sendTransfer.mockRejectedValue(new Error('boom'));
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
@@ -156,7 +223,7 @@ describe('CreateTransferUseCase', () => {
       TransactionStatus.CREATED,
     );
 
-    await expect(useCase.execute(transactionForTest)).rejects.toThrow(
+    await expect(useCase.execute(transactionForTest, 'v1')).rejects.toThrow(
       InternalServerErrorException,
     );
     expect(metricsService.increment).toHaveBeenCalledWith('transfer_failed');
@@ -177,7 +244,7 @@ describe('CreateTransferUseCase', () => {
       TransactionStatus.CREATED,
     );
 
-    await expect(useCase.execute(transactionForTest)).rejects.toThrow(
+    await expect(useCase.execute(transactionForTest, 'v1')).rejects.toThrow(
       InternalServerErrorException,
     );
     expect(metricsService.increment).toHaveBeenCalledWith('transfer_failed');

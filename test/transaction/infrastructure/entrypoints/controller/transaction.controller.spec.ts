@@ -89,6 +89,7 @@ describe('TransactionController', () => {
 
   it('should map request to entity and return response with id, status and external data', async () => {
     const response: CreateTransferResponse = await controller.create(
+      'v1',
       'transfer-001',
       validRequestBody,
     );
@@ -96,8 +97,9 @@ describe('TransactionController', () => {
     expect(createTransferUseCase.execute).toHaveBeenCalledTimes(1);
     expect(idempotencyService.handle).toHaveBeenCalledTimes(1);
     const firstCallArgs = createTransferUseCase.execute.mock
-      .calls[0] as unknown as [Transaction];
+      .calls[0] as unknown as [Transaction, string];
     const passedTransaction = firstCallArgs[0];
+    expect(firstCallArgs[1]).toBe('v1');
     expect(passedTransaction).toBeInstanceOf(Transaction);
     expect(passedTransaction.id).toBe('tx-002');
     expect(passedTransaction.amount).toBe(111000);
@@ -118,8 +120,24 @@ describe('TransactionController', () => {
 
   it('should fail when idempotency key is missing', async () => {
     await expect(
-      controller.create(undefined as never, validRequestBody),
+      controller.create(undefined, undefined as never, validRequestBody),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('omitted brebVersion query passes empty string (default v1 in use case)', async () => {
+    const response: CreateTransferResponse = await controller.create(
+      undefined,
+      'transfer-default',
+      validRequestBody,
+    );
+
+    expect(createTransferUseCase.execute).toHaveBeenCalledTimes(1);
+    const args = createTransferUseCase.execute.mock.calls[0] as unknown as [
+      Transaction,
+      string,
+    ];
+    expect(args[1]).toBe('');
+    expect(response.id).toBe('tx-002');
   });
 
   it('GET getTransferById - returns 200 and sends response when transfer exists', async () => {

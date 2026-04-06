@@ -5,8 +5,9 @@ import type {
   ExternalTransferResult,
   ExternalTransferService,
 } from '../../../../../domain/providers/external-transfer.service';
-import { mapBrebResponseToTransferResult } from './breb-response.mapper';
-import type { BrebHttp2Client } from '../client/breb-http2.client';
+import { mapBrebResponseToTransferResult } from '../mappers/breb-response.mapper';
+import { mapTransactionToBrebTransferPayload } from '../mappers/breb-transfer-request.mapper';
+import type { Http2Client } from '../../client/http2.client';
 import { getCorrelationId } from 'src/common/utils/correlation.util';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
 
@@ -14,7 +15,7 @@ export abstract class BrebAdapterBase implements ExternalTransferService {
   protected abstract readonly logger: Logger;
 
   constructor(
-    protected readonly brebClient: BrebHttp2Client,
+    protected readonly brebClient: Http2Client,
     protected readonly metricsService: MetricsServicePort,
   ) {}
 
@@ -26,21 +27,7 @@ export abstract class BrebAdapterBase implements ExternalTransferService {
         `sendTransfer started | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id}`,
       );
       await this.metricsService.increment('breb_calls');
-      const body = {
-        transaction: {
-          id: transaction.id,
-          amount: transaction.amount,
-          currency: transaction.currency,
-          description: transaction.description,
-          receiver: {
-            document: transaction.receiverDocument,
-            documentType: transaction.receiverDocumentType,
-            name: transaction.receiverName,
-            account: transaction.receiverAccount,
-            accountType: transaction.receiverAccountType,
-          },
-        },
-      };
+      const body = mapTransactionToBrebTransferPayload(transaction);
       const data = await this.brebClient.postJson(body);
       const result = mapBrebResponseToTransferResult(data);
       this.logger.log(

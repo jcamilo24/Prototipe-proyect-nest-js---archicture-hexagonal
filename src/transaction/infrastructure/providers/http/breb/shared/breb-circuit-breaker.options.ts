@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
-import type { BrebCircuitBreakerOptions } from './breb-circuit-breaker.factory';
+import type { CircuitBreakerOptions } from '../../shared/circuit-breaker.factory';
 
-const ENV_KEYS: Record<keyof BrebCircuitBreakerOptions, string> = {
+const ENV_KEYS: Record<keyof CircuitBreakerOptions, string> = {
   timeout: 'BREB_CIRCUIT_TIMEOUT_MS',
   errorThresholdPercentage: 'BREB_CIRCUIT_ERROR_THRESHOLD_PERCENT',
   resetTimeout: 'BREB_CIRCUIT_RESET_TIMEOUT_MS',
@@ -14,9 +14,10 @@ function parseEnvInt(value: string | undefined): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
+/** Lee variables `BREB_CIRCUIT_*` (mismo contrato que `CircuitBreakerOptions`). */
 export function getBrebCircuitBreakerOptions(
   config: ConfigService,
-): BrebCircuitBreakerOptions {
+): CircuitBreakerOptions {
   const timeout = parseEnvInt(config.get(ENV_KEYS.timeout));
   const errorThresholdPercentage = parseEnvInt(
     config.get(ENV_KEYS.errorThresholdPercentage),

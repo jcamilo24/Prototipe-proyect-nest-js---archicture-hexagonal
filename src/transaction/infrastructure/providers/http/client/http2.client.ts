@@ -3,17 +3,17 @@ import { ConfigService } from '@nestjs/config';
 import * as http2 from 'node:http2';
 import { getCorrelationId, getIdempotencyKey } from 'src/common/utils/correlation.util';
 import {
-  createBrebHttpCircuitBreaker,
-  type BrebHttpCircuitBreakerInstance,
-} from '../shared/breb-circuit-breaker.factory';
-import { getBrebCircuitBreakerOptions } from '../shared/breb-circuit-breaker.options';
+  createAsyncFnCircuitBreaker,
+  type AsyncFnCircuitBreaker,
+} from '../shared/circuit-breaker.factory';
+import { getBrebCircuitBreakerOptions } from '../breb/shared/breb-circuit-breaker.options';
 
-export const BREB_HTTP2_CLIENT_V1 = 'BrebHttp2ClientV1';
-export const BREB_HTTP2_CLIENT_V2 = 'BrebHttp2ClientV2';
+export const HTTP2_CLIENT_V1 = 'Http2ClientV1';
+export const HTTP2_CLIENT_V2 = 'Http2ClientV2';
 
-export const BREB_HTTP2_CLIENT = BREB_HTTP2_CLIENT_V1;
+export const HTTP2_CLIENT = HTTP2_CLIENT_V1;
 
-export interface BrebHttp2Client {
+export interface Http2Client {
   postJson(body: Record<string, unknown>): Promise<unknown>;
   getJson(path: string): Promise<unknown>;
 }
@@ -27,9 +27,9 @@ type RequestOptions = {
 };
 
 @Injectable()
-export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
-  private readonly logger = new Logger(BrebHttp2ClientImpl.name);
-  private readonly breaker: BrebHttpCircuitBreakerInstance;
+export class Http2ClientImpl implements Http2Client, OnModuleDestroy {
+  private readonly logger = new Logger(Http2ClientImpl.name);
+  private readonly circuitBreaker: AsyncFnCircuitBreaker;
   private session: http2.ClientHttp2Session | null = null;
   private readonly baseUrl: string;
 
@@ -39,15 +39,15 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
   ) {
     this.baseUrl = baseUrl;
     const options = getBrebCircuitBreakerOptions(this.configService);
-    this.breaker = createBrebHttpCircuitBreaker(this.logger, options);
+    this.circuitBreaker = createAsyncFnCircuitBreaker(this.logger, options);
   }
 
   async postJson(requestBody: Record<string, unknown>): Promise<unknown> {
-    return this.breaker.fire(() => this.doPostJson(requestBody));
+    return this.circuitBreaker.fire(() => this.doPostJson(requestBody));
   }
 
   async getJson(subPath: string): Promise<unknown> {
-    return this.breaker.fire(() => this.doGetJson(subPath));
+    return this.circuitBreaker.fire(() => this.doGetJson(subPath));
   }
 
   private async doPostJson(requestBody: Record<string, unknown>): Promise<unknown> {
@@ -199,3 +199,5 @@ export class BrebHttp2ClientImpl implements BrebHttp2Client, OnModuleDestroy {
     });
   }
 }
+
+export { Http2ClientImpl as BrebHttp2ClientImpl };

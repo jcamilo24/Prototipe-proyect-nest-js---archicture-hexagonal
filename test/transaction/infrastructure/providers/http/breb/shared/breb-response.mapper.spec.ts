@@ -1,4 +1,4 @@
-import { mapBrebResponseToTransferResult } from 'src/transaction/infrastructure/providers/http/breb/shared/breb-response.mapper';
+import { mapBrebResponseToTransferResult } from 'src/transaction/infrastructure/providers/http/breb/mappers/breb-response.mapper';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 
 describe('mapBrebResponseToTransferResult', () => {

@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
-import { BREB_HTTP2_CLIENT_V1 } from 'src/transaction/infrastructure/providers/http/breb/client/breb-http2.client';
+import { HTTP2_CLIENT_V1 } from 'src/transaction/infrastructure/providers/http/client/http2.client';
 import { BrebV1Adapter } from 'src/transaction/infrastructure/providers/http/breb/v1/breb-v1.adapter';
 
 describe('BrebV1Adapter', () => {
@@ -54,7 +54,7 @@ describe('BrebV1Adapter', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BrebV1Adapter,
-        { provide: BREB_HTTP2_CLIENT_V1, useValue: brebClient },
+        { provide: HTTP2_CLIENT_V1, useValue: brebClient },
         {
           provide: 'MetricsService',
           useValue: metricsService satisfies MetricsServicePort,

@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
@@ -22,7 +23,7 @@ describe('CreateTransferUseCase', () => {
   const mockTransaction = new Transaction(
     'tx-001',
     100000,
-    'PESOS',
+    'USD',
     'Recarga',
     '123456',
     'CC',
@@ -73,7 +74,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      'USD',
       'Recarga',
       '123456',
       'CC',
@@ -104,7 +105,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      'USD',
       'Recarga',
       '123456',
       'CC',
@@ -125,7 +126,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      'USD',
       'Recarga',
       '123456',
       'CC',
@@ -146,7 +147,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      'USD',
       'Recarga',
       '123456',
       'CC',
@@ -170,7 +171,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      'USD',
       'Recarga',
       '123456',
       'CC',
@@ -187,13 +188,49 @@ describe('CreateTransferUseCase', () => {
     );
   });
 
+  it('should reject unsupported currency with BadRequest before calling external service', async () => {
+    const transactionForTest = new Transaction(
+      'tx-bad-currency',
+      1000,
+      'EUR',
+      'x',
+      '1',
+      'CC',
+      'Name',
+      'acc',
+      'Ahorros',
+      TransactionStatus.CREATED,
+    );
+
+    const err = await useCase
+      .execute(transactionForTest, 'v1')
+      .then(
+        () => {
+          throw new Error('expected execute to reject');
+        },
+        (e) => e,
+      );
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as BadRequestException).getResponse()).toEqual(
+      expect.objectContaining({
+        message: 'Unsupported currency for transaction tx-bad-currency: EUR',
+      }),
+    );
+    expect(externalTransferV1.sendTransfer).not.toHaveBeenCalled();
+    expect(externalTransferV2.sendTransfer).not.toHaveBeenCalled();
+    expect(transactionRepository.save).not.toHaveBeenCalled();
+    expect(metricsService.increment).not.toHaveBeenCalledWith(
+      'transfer_failed',
+    );
+  });
+
   it('should rethrow HttpException from external service and increment transfer_failed', async () => {
     const ex = new BadGatewayException('upstream');
     externalTransferV1.sendTransfer.mockRejectedValue(ex);
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      'USD',
       'Recarga',
       '123456',
       'CC',
@@ -213,7 +250,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      'USD',
       'Recarga',
       '123456',
       'CC',
@@ -234,7 +271,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      'USD',
       'Recarga',
       '123456',
       'CC',

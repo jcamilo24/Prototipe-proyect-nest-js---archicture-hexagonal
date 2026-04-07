@@ -39,6 +39,9 @@ export class TransactionDocument extends Document {
 
   @Prop({ required: true, default: () => new Date() })
   transactionDate: Date;
+
+  @Prop({ required: false, default: 0 })
+  fee: number = 0;
 }
 
 export const TransactionSchema =

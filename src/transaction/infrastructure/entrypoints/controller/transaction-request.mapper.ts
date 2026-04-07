@@ -45,6 +45,7 @@ export function mapResultToResponse(result: {
       eventDate: externalResponse.eventDate,
       traceId: externalResponse.traceId,
     },
+    fee: transaction.fee,
   };
 }
 

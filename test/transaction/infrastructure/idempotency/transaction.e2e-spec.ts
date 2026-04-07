@@ -167,7 +167,7 @@ describe('TransactionController (e2e)', () => {
       transaction: {
         id: 'tx-e2e-001',
         amount: 50000,
-        currency: 'PESOS',
+        currency: 'USD',
         description: 'Test e2e',
         receiver: {
           document: '12345678',
@@ -194,6 +194,7 @@ describe('TransactionController (e2e)', () => {
           id: 'tx-e2e-001',
           status: TransactionStatus.CONFIRMED,
           endToEndId: 'e2e-end-to-end-id',
+          fee: 1000,
           properties: {
             traceId: 'e2e-trace-id',
             eventDate: '2025-02-27T12:00:00Z',
@@ -313,7 +314,7 @@ describe('TransactionController (e2e)', () => {
       transaction: {
         id: 'tx-e2e-b',
         amount: 2000,
-        currency: 'PESOS',
+        currency: 'USD',
         description: 'Second',
         receiver: {
           document: '222',
@@ -467,5 +468,38 @@ describe('TransactionController (e2e)', () => {
         },
       })
       .expect(400);
+  });
+
+  it('POST /transactions/transfer - unsupported currency returns 400 and does not call BREB', async () => {
+    const server = app.getHttpServer() as unknown as Server;
+
+    await request(server)
+      .post('/transactions/transfer')
+      .set(IDEMPOTENCY_HEADER, 'e2e-key-bad-currency')
+      .send({
+        transaction: {
+          id: 'tx-e2e-bad-curr',
+          amount: 100,
+          currency: 'EUR',
+          description: 'bad currency',
+          receiver: {
+            document: '1',
+            documentType: 'CC',
+            name: 'X',
+            account: 'acc',
+            accountType: 'Ahorros',
+          },
+        },
+      })
+      .expect(400)
+      .expect((res: { body: { message?: string | string[] } }) => {
+        const msg = res.body?.message;
+        const text = Array.isArray(msg) ? msg.join(' ') : String(msg ?? '');
+        expect(text).toMatch(/Unsupported currency for transaction tx-e2e-bad-curr: EUR/);
+      });
+
+    expect(mockExternalTransferV1.sendTransfer).not.toHaveBeenCalled();
+    expect(mockExternalTransferV2.sendTransfer).not.toHaveBeenCalled();
+    expect(mockTransactionRepository.save).not.toHaveBeenCalled();
   });
 });

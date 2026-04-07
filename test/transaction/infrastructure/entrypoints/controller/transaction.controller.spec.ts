@@ -115,6 +115,7 @@ describe('TransactionController', () => {
         eventDate: '2025-02-27T12:00:00Z',
         traceId: 'trace-abc',
       },
+      fee: 0,
     });
   });
 
@@ -144,7 +145,7 @@ describe('TransactionController', () => {
     const mockTransaction = new Transaction(
       'tx-get-001',
       50000,
-      'PESOS',
+      'USD',
       'Test',
       '123',
       'CC',

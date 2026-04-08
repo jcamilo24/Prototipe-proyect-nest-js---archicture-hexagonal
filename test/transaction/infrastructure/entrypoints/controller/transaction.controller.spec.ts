@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import type { FastifyReply } from 'fastify';
 import { CreateTransferUseCase } from 'src/transaction/application/use-cases/create-transfer.use-case';
 import { GetTransferByIdUseCase } from 'src/transaction/application/use-cases/get-transfer-by-id.use-case';
+import { Currency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import { TransactionController } from 'src/transaction/infrastructure/entrypoints/controller/transaction.controller';
@@ -34,7 +35,7 @@ describe('TransactionController', () => {
     transaction: new Transaction(
       'tx-002',
       111000,
-      'USD',
+      Currency.USD,
       'Recarga celular',
       '3006985758',
       'CC',
@@ -145,7 +146,7 @@ describe('TransactionController', () => {
     const mockTransaction = new Transaction(
       'tx-get-001',
       50000,
-      'USD',
+      Currency.USD,
       'Test',
       '123',
       'CC',

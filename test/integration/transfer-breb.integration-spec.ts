@@ -8,7 +8,9 @@ import {
 import { BrebHttp2ClientImpl } from '../../src/transaction/infrastructure/providers/http/client/http2.client';
 import { BrebV1Adapter } from '../../src/transaction/infrastructure/providers/http/breb/v1/breb-v1.adapter';
 import { CreateTransferUseCase } from '../../src/transaction/application/use-cases/create-transfer.use-case';
+import { Currency } from '../../src/transaction/domain/currency.enum';
 import { Transaction } from '../../src/transaction/domain/entity/transaction.entity';
+import { TransferFeeCalculator } from '../../src/transaction/domain/transfer-fee.calculator';
 import { TransactionStatus } from '../../src/transaction/domain/transaction-status.enum';
 import type { TransactionRepository } from '../../src/transaction/domain/providers/transaction.repository';
 import type { MetricsServicePort } from '../../src/metrics/domain/providers/metrics.service.provider';
@@ -120,12 +122,13 @@ describe('Integration: transfer → mock BREB (HTTP/2)', () => {
       adapter,
       noopV2 as never,
       metrics,
+      new TransferFeeCalculator(),
     );
 
     const transaction = new Transaction(
       'tx-int-001',
       5000,
-      'USD',
+      Currency.USD,
       'Integration',
       '3006985758',
       'CC',

@@ -1,5 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import type { Model } from 'mongoose';
+import { Currency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import { TransactionRepositoryImpl } from 'src/transaction/infrastructure/providers/persistence/transaction.repository';
@@ -10,7 +11,7 @@ describe('TransactionRepositoryImpl', () => {
     new Transaction(
       'repo-tx',
       10,
-      'USD',
+      Currency.USD,
       'd',
       '1',
       'CC',

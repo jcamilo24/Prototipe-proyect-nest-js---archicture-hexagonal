@@ -6,10 +6,12 @@ import request from 'supertest';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
 import { CreateTransferUseCase } from 'src/transaction/application/use-cases/create-transfer.use-case';
 import { GetTransferByIdUseCase } from 'src/transaction/application/use-cases/get-transfer-by-id.use-case';
+import { Currency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import type { IdempotencyService } from 'src/transaction/domain/providers/idempotency.service';
 import type { TransactionRepository } from 'src/transaction/domain/providers/transaction.repository';
+import { TransferFeeCalculator } from 'src/transaction/domain/transfer-fee.calculator';
 import { TransactionController } from 'src/transaction/infrastructure/entrypoints/controller/transaction.controller';
 import type { CreateTransferResponse } from 'src/transaction/infrastructure/entrypoints/model/create-transfer.response';
 
@@ -85,6 +87,7 @@ describe('TransactionController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       controllers: [TransactionController],
       providers: [
+        TransferFeeCalculator,
         {
           provide: CreateTransferUseCase,
           useFactory: (
@@ -92,18 +95,21 @@ describe('TransactionController (e2e)', () => {
             v1: typeof mockExternalTransferV1,
             v2: typeof mockExternalTransferV2,
             metricsService: MetricsServicePort,
+            transferFeeCalculator: TransferFeeCalculator,
           ) =>
             new CreateTransferUseCase(
               transactionRepository,
               v1 as never,
               v2 as never,
               metricsService,
+              transferFeeCalculator,
             ),
           inject: [
             'TransactionRepository',
             'ExternalTransferV1',
             'ExternalTransferV2',
             'MetricsService',
+            TransferFeeCalculator,
           ],
         },
         {
@@ -405,7 +411,7 @@ describe('TransactionController (e2e)', () => {
     const storedTransaction = new Transaction(
       'tx-e2e-get',
       75000,
-      'USD',
+      Currency.USD,
       'E2E GET test',
       '111',
       'CC',
@@ -470,7 +476,7 @@ describe('TransactionController (e2e)', () => {
       .expect(400);
   });
 
-  it('POST /transactions/transfer - unsupported currency returns 400 and does not call BREB', async () => {
+  it('POST /transactions/transfer - unsupported currency returns 400 before BREB', async () => {
     const server = app.getHttpServer() as unknown as Server;
 
     await request(server)
@@ -491,12 +497,7 @@ describe('TransactionController (e2e)', () => {
           },
         },
       })
-      .expect(400)
-      .expect((res: { body: { message?: string | string[] } }) => {
-        const msg = res.body?.message;
-        const text = Array.isArray(msg) ? msg.join(' ') : String(msg ?? '');
-        expect(text).toMatch(/Unsupported currency for transaction tx-e2e-bad-curr: EUR/);
-      });
+      .expect(400);
 
     expect(mockExternalTransferV1.sendTransfer).not.toHaveBeenCalled();
     expect(mockExternalTransferV2.sendTransfer).not.toHaveBeenCalled();

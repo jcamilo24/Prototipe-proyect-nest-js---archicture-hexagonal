@@ -1,3 +1,4 @@
+import { parseTransactionCurrency } from '../../../domain/currency.enum';
 import { Transaction } from '../../../domain/entity/transaction.entity';
 import { TransactionDocument } from './transaction.schema';
 
@@ -7,7 +8,7 @@ export class TransactionMapper {
     return new Transaction(
       doc.id,
       doc.amount,
-      doc.currency,
+      parseTransactionCurrency(doc.id, doc.currency),
       doc.description,
       doc.receiverDocument,
       doc.receiverDocumentType,

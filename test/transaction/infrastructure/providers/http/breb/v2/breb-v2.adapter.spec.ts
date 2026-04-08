@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
+import { Currency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import { HTTP2_CLIENT_V2 } from 'src/transaction/infrastructure/providers/http/client/http2.client';
@@ -16,7 +17,7 @@ describe('BrebV2Adapter', () => {
   const mockTransaction = new Transaction(
     'tx-v2-001',
     100000,
-    'PESOS',
+    Currency.COP,
     'Recarga',
     '123456',
     'CC',

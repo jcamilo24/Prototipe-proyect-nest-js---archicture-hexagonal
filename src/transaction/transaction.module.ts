@@ -19,6 +19,7 @@ import {
 import { RedisIdempotencyService } from './infrastructure/idempotency/redis-idempotency.service';
 import { GetTransferByIdUseCase } from './application/use-cases/get-transfer-by-id.use-case';
 import { TransactionRepository } from './domain/providers/transaction.repository';
+import { TransferFeeCalculator } from './domain/transfer-fee.calculator';
 import { MetricsModule } from 'src/metrics/metrics.module';
 import { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
 import { RedisModule } from 'src/config/redis/redis.module';
@@ -51,6 +52,7 @@ import { RedisModule } from 'src/config/redis/redis.module';
     },
     BrebV1Adapter,
     BrebV2Adapter,
+    TransferFeeCalculator,
     {
       provide: CreateTransferUseCase,
       useFactory: (
@@ -58,18 +60,21 @@ import { RedisModule } from 'src/config/redis/redis.module';
         brebV1Adapter: BrebV1Adapter,
         brebV2Adapter: BrebV2Adapter,
         metricsService: MetricsServicePort,
+        transferFeeCalculator: TransferFeeCalculator,
       ) =>
         new CreateTransferUseCase(
           transactionRepository,
           brebV1Adapter,
           brebV2Adapter,
           metricsService,
+          transferFeeCalculator,
         ),
       inject: [
         'TransactionRepository',
         BrebV1Adapter,
         BrebV2Adapter,
         'MetricsService',
+        TransferFeeCalculator,
       ],
     },
     {

@@ -1,4 +1,5 @@
 import { GetTransferByIdUseCase } from 'src/transaction/application/use-cases/get-transfer-by-id.use-case';
+import { Currency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import type { TransactionRepository } from 'src/transaction/domain/providers/transaction.repository';
@@ -10,7 +11,7 @@ describe('GetTransferByIdUseCase', () => {
   const mockTransaction = new Transaction(
     'tx-get-001',
     50000,
-    'PESOS',
+    Currency.COP,
     'Test transfer',
     '123',
     'CC',

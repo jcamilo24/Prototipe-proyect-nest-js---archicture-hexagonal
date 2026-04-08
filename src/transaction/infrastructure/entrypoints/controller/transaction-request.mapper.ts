@@ -1,4 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
+import { throwUseCaseBadRequest } from 'src/transaction/application/errors/use-case-error.helper';
+import { parseTransactionCurrency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import type { ExternalTransferResult } from 'src/transaction/domain/providers/external-transfer.service';
@@ -17,10 +19,17 @@ export function mapRequestToEntity(
 
   const { document, documentType, name, account, accountType } = t.receiver;
 
+  let currency;
+  try {
+    currency = parseTransactionCurrency(t.id, t.currency);
+  } catch (err) {
+    throwUseCaseBadRequest(err);
+  }
+
   return new Transaction(
     t.id,
     t.amount,
-    t.currency,
+    currency,
     t.description,
     document,
     documentType,

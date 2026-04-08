@@ -1,4 +1,4 @@
-import { UnsupportedTransactionCurrencyError } from '../../application/errors/unsupported-transaction-currency.error';
+import { Currency } from '../currency.enum';
 import { TransactionStatus } from '../transaction-status.enum';
 import { validateFinalization } from '../transaction-status.validator';
 
@@ -10,7 +10,7 @@ export class Transaction {
   constructor(
     public readonly id: string,
     public readonly amount: number,
-    public readonly currency: string,
+    public readonly currency: Currency,
     public readonly description: string,
     public readonly receiverDocument: string,
     public readonly receiverDocumentType: string,
@@ -45,21 +45,8 @@ export class Transaction {
     this._finalizedAt = new Date();
   }
 
-  applyFee(): void {
-    if (this.currency !== 'COP' && this.currency !== 'USD') {
-      throw new UnsupportedTransactionCurrencyError(this.id, this.currency);
-    }
-
+  setFee(fee: number): void {
     if (this._fee > 0) return;
-  
-    if (this.currency === 'COP') {
-      this._fee = Math.round(this.amount * 0.01 * 100) / 100; //redondear para ser mas exactos
-      return;
-    }
-  
-    if (this.currency === 'USD') {
-      this._fee = Math.round(this.amount * 0.02 * 100) / 100;//redondear para ser mas exactos
-      return;
-    }
+    this._fee = fee;
   }
 }

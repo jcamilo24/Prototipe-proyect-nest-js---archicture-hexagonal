@@ -65,7 +65,7 @@ describe('CreateTransferUseCase', () => {
       externalTransferV1 as unknown as ExternalTransferService,
       externalTransferV2 as unknown as ExternalTransferService,
       metricsService satisfies MetricsServicePort,
-      new TransferFeeCalculator(),
+      new TransferFeeCalculator({ copRate: 0.01, usdRate: 0.02 }),
     );
   });
 

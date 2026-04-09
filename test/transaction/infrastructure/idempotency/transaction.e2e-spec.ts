@@ -87,7 +87,10 @@ describe('TransactionController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       controllers: [TransactionController],
       providers: [
-        TransferFeeCalculator,
+        {
+          provide: TransferFeeCalculator,
+          useValue: new TransferFeeCalculator({ copRate: 0.01, usdRate: 0.02 }),
+        },
         {
           provide: CreateTransferUseCase,
           useFactory: (

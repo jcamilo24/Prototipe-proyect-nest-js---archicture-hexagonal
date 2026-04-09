@@ -1,11 +1,18 @@
 import { Currency } from './currency.enum';
 import { UnsupportedCurrencyException } from './unsupported-currency.exception';
 
+/** Tasas por moneda (inyectadas vía config / env en la capa de aplicación). */
+export interface TransferFeeRates {
+  copRate: number;
+  usdRate: number;
+}
+
 /**
  * Regla de comisión operativa por moneda (dominio, sin dependencias de framework).
- * COP: 1%, USD: 2%, redondeo a 2 decimales como en la entidad previa.
  */
 export class TransferFeeCalculator {
+  constructor(private readonly rates: TransferFeeRates) {}
+
   calculate(
     transactionId: string,
     amount: number,
@@ -13,9 +20,9 @@ export class TransferFeeCalculator {
   ): number {
     switch (currency) {
       case Currency.COP:
-        return Math.round(amount * 0.01 * 100) / 100;
+        return Math.round(amount * this.rates.copRate * 100) / 100;
       case Currency.USD:
-        return Math.round(amount * 0.02 * 100) / 100;
+        return Math.round(amount * this.rates.usdRate * 100) / 100;
       default:
         throw new UnsupportedCurrencyException(
           transactionId,

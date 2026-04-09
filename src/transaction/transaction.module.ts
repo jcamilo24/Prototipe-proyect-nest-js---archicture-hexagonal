@@ -11,6 +11,7 @@ import {
   Http2ClientImpl,
 } from './infrastructure/providers/http/client/http2.client';
 import { resolveBrebV1BaseUrl, resolveBrebV2BaseUrl } from '../config/breb/breb-http2.config';
+import { resolveTransferFeeRates } from '../config/transfer-fee/transfer-fee.config';
 import { TransactionRepositoryImpl } from './infrastructure/providers/persistence/transaction.repository';
 import {
   TransactionDocument,
@@ -52,7 +53,12 @@ import { RedisModule } from 'src/config/redis/redis.module';
     },
     BrebV1Adapter,
     BrebV2Adapter,
-    TransferFeeCalculator,
+    {
+      provide: TransferFeeCalculator,
+      useFactory: (config: ConfigService) =>
+        new TransferFeeCalculator(resolveTransferFeeRates(config)),
+      inject: [ConfigService],
+    },
     {
       provide: CreateTransferUseCase,
       useFactory: (

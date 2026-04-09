@@ -122,7 +122,7 @@ describe('Integration: transfer → mock BREB (HTTP/2)', () => {
       adapter,
       noopV2 as never,
       metrics,
-      new TransferFeeCalculator(),
+      new TransferFeeCalculator({ copRate: 0.01, usdRate: 0.02 }),
     );
 
     const transaction = new Transaction(

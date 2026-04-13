@@ -1,11 +1,11 @@
 import {
   BadGatewayException,
-  BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
 import { CreateTransferUseCase } from 'src/transaction/application/use-cases/create-transfer.use-case';
 import { Currency } from 'src/transaction/domain/currency.enum';
+import { UnsupportedCurrencyException } from 'src/transaction/domain/unsupported-currency.exception';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import { TransferFeeCalculator } from 'src/transaction/domain/transfer-fee.calculator';
@@ -191,7 +191,7 @@ describe('CreateTransferUseCase', () => {
     );
   });
 
-  it('should map unsupported currency to BadRequest via throwUseCaseBadRequest before external service', async () => {
+  it('should propagate UnsupportedCurrencyException from fee calculation before external service', async () => {
     const transactionForTest = new Transaction(
       'tx-bad-currency',
       1000,
@@ -213,7 +213,7 @@ describe('CreateTransferUseCase', () => {
         },
         (e) => e,
       );
-    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err).toBeInstanceOf(UnsupportedCurrencyException);
     expect(metricsService.increment).not.toHaveBeenCalledWith(
       'transfer_failed',
     );

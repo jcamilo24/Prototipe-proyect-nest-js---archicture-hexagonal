@@ -1,5 +1,6 @@
 /**
- * Fallo de validación de moneda (dominio). La capa de aplicación puede mapearla a HTTP 400.
+ * Fallo de validación de moneda (dominio).
+ * El adaptador de entrada HTTP (filtro de excepciones) la traduce a respuesta 400.
  */
 export class UnsupportedCurrencyException extends Error {
   constructor(

@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import type { Server } from 'http';
@@ -12,6 +13,7 @@ import { TransactionStatus } from 'src/transaction/domain/transaction-status.enu
 import type { IdempotencyService } from 'src/transaction/domain/providers/idempotency.service';
 import type { TransactionRepository } from 'src/transaction/domain/providers/transaction.repository';
 import { TransferFeeCalculator } from 'src/transaction/domain/transfer-fee.calculator';
+import { UnsupportedCurrencyExceptionFilter } from 'src/transaction/infrastructure/entrypoints/filters/unsupported-currency.exception-filter';
 import { TransactionController } from 'src/transaction/infrastructure/entrypoints/controller/transaction.controller';
 import type { CreateTransferResponse } from 'src/transaction/infrastructure/entrypoints/model/create-transfer.response';
 
@@ -87,6 +89,10 @@ describe('TransactionController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       controllers: [TransactionController],
       providers: [
+        {
+          provide: APP_FILTER,
+          useClass: UnsupportedCurrencyExceptionFilter,
+        },
         {
           provide: TransferFeeCalculator,
           useValue: new TransferFeeCalculator({ copRate: 0.01, usdRate: 0.02 }),

@@ -6,10 +6,6 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 
-/**
- * Maps persistence errors (MongoDB/Mongoose) to Nest HTTP exceptions.
- * Preserves context and cause for logging.
- */
 export function throwPersistenceError(err: unknown, context: string): never {
   if (err instanceof HttpException) throw err;
 

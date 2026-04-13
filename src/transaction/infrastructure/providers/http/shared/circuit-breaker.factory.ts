@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import CircuitBreaker from 'opossum';
 
-/** Opciones compatibles con opossum; reutilizable para cualquier cliente HTTP u otro adaptador. */
+/** Options compatible with opossum; reusable for any HTTP client or other adapter. */
 export type CircuitBreakerOptions = {
   timeout: number;
   errorThresholdPercentage: number;

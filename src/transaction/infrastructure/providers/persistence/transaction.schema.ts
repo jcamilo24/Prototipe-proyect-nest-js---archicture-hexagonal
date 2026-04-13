@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
+import { Currency } from 'src/transaction/domain/currency.enum';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 
 @Schema({ collection: 'transactions', timestamps: true })
@@ -10,8 +11,8 @@ export class TransactionDocument extends Document {
   @Prop({ required: true })
   amount: number;
 
-  @Prop({ required: true })
-  currency: string;
+  @Prop({ required: true, type: String, enum: Object.values(Currency) })
+  currency: Currency;
 
   @Prop()
   description: string;
@@ -39,6 +40,9 @@ export class TransactionDocument extends Document {
 
   @Prop({ required: true, default: () => new Date() })
   transactionDate: Date;
+
+  @Prop({ required: false, default: 0 })
+  fee: number = 0;
 }
 
 export const TransactionSchema =

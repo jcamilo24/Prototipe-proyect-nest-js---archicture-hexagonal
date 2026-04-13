@@ -7,7 +7,6 @@ export function parseBrebApiVersion(raw: string): BrebApiVersion | null {
   return null;
 }
 
-/** Unknown or empty version → v1 (default BREB adapter). */
 export function resolveBrebApiVersion(raw: string): BrebApiVersion {
   return parseBrebApiVersion(raw) ?? 'v1';
 }

@@ -1,7 +1,7 @@
 const { writeFileSync } = require('node:fs') as typeof import('node:fs');
 const { join } = require('node:path') as typeof import('node:path');
 
-/** Opcional: `?brebVersion=v2`. Sin query → BREB v1 por defecto. */
+/** Optional: `?brebVersion=v2`. No query → BREB v1 by default. */
 const transferUrl = 'http://localhost:3000/transactions/transfer';
 const PARALLEL_REQUESTS = 100;
 const runId = Date.now();

@@ -11,13 +11,13 @@ export class MetricsController {
     private readonly PrometheusMetrics: PrometheusMetrics,
   ) {}
 
-  /** Snapshot JSON persistido en Redis (comportamiento existente). */
+  /** Redis */
   @Get('/metrics')
   async getMetrics() {
     return this.metricsService.getMetrics();
   }
 
-  /** Texto plano para scrape Prometheus; no sustituye `/metrics` JSON. */
+  /** Docker Prometheus; does not replace `/metrics` JSON. */
   @Get('/metrics/prometheus')
   async getPrometheusMetrics(
     @Res({ passthrough: false }) res: FastifyReply,

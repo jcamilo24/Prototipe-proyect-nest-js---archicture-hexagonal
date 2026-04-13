@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common';
 import { resolveBrebApiVersion } from '../../domain/breb-api-version';
 import { Transaction } from '../../domain/entity/transaction.entity';
+import { UnsupportedCurrencyException } from '../../domain/unsupported-currency.exception';
+import { TransferFeeCalculator } from '../../domain/transfer-fee.calculator';
 import type { TransactionRepository } from '../../domain/providers/transaction.repository';
 import type {
   ExternalTransferResult,
@@ -23,6 +25,7 @@ export class CreateTransferUseCase {
     private readonly externalTransferV1: ExternalTransferService,
     private readonly externalTransferV2: ExternalTransferService,
     private readonly metricsService: MetricsServicePort,
+    private readonly transferFeeCalculator: TransferFeeCalculator,
   ) {}
 
   async execute(
@@ -37,6 +40,12 @@ export class CreateTransferUseCase {
 
     let externalResponse: ExternalTransferResult;
     try {
+      const fee = this.transferFeeCalculator.calculate(
+        transaction.id,
+        transaction.amount,
+        transaction.currency,
+      );
+      transaction.setFee(fee);
       this.logger.debug(
         `Calling external transfer | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} brebVersion=${brebVersion}`,
       );
@@ -46,6 +55,9 @@ export class CreateTransferUseCase {
         `External transfer ok | correlationId=${getCorrelationId() ?? '-'} transactionId=${transaction.id} status=${externalResponse.status} traceId=${externalResponse.traceId ?? '-'}`,
       );
     } catch (err) {
+      if (err instanceof UnsupportedCurrencyException) {
+        throw err;
+      }
       await this.metricsService.increment('transfer_failed');
       throwUseCaseError(err, `(step: external transfer)`);
     }

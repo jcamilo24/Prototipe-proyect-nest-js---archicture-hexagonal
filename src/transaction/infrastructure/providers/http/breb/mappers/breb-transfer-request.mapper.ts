@@ -1,9 +1,5 @@
 import { Transaction } from '../../../../../domain/entity/transaction.entity';
 
-/**
- * Cuerpo JSON del POST a BREB (transfer) a partir de la entidad de dominio.
- * Misma forma que espera el contrato externo bajo la clave `transaction`.
- */
 export function mapTransactionToBrebTransferPayload(
   transaction: Transaction,
 ): Record<string, unknown> {

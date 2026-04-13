@@ -1,3 +1,4 @@
+import { Currency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import { TransactionMapper } from 'src/transaction/infrastructure/providers/persistence/transaction.mapper';
@@ -28,13 +29,14 @@ describe('TransactionMapper', () => {
     expect(entity.id).toBe('t1');
     expect(entity.status).toBe(TransactionStatus.CONFIRMED);
     expect(entity.finalizedAt).toEqual(fin);
+    expect(entity.currency).toBe(Currency.USD);
   });
 
   it('toPersistence maps entity fields for Mongoose create', () => {
     const entity = new Transaction(
       't2',
       200,
-      'COP',
+      Currency.COP,
       'desc',
       'doc',
       'CC',

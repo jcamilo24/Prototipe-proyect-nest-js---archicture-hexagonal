@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import type { Server } from 'http';
@@ -6,10 +7,13 @@ import request from 'supertest';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
 import { CreateTransferUseCase } from 'src/transaction/application/use-cases/create-transfer.use-case';
 import { GetTransferByIdUseCase } from 'src/transaction/application/use-cases/get-transfer-by-id.use-case';
+import { Currency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import type { IdempotencyService } from 'src/transaction/domain/providers/idempotency.service';
 import type { TransactionRepository } from 'src/transaction/domain/providers/transaction.repository';
+import { TransferFeeCalculator } from 'src/transaction/domain/transfer-fee.calculator';
+import { UnsupportedCurrencyExceptionFilter } from 'src/transaction/infrastructure/entrypoints/filters/unsupported-currency.exception-filter';
 import { TransactionController } from 'src/transaction/infrastructure/entrypoints/controller/transaction.controller';
 import type { CreateTransferResponse } from 'src/transaction/infrastructure/entrypoints/model/create-transfer.response';
 
@@ -86,24 +90,35 @@ describe('TransactionController (e2e)', () => {
       controllers: [TransactionController],
       providers: [
         {
+          provide: APP_FILTER,
+          useClass: UnsupportedCurrencyExceptionFilter,
+        },
+        {
+          provide: TransferFeeCalculator,
+          useValue: new TransferFeeCalculator({ copRate: 0.01, usdRate: 0.02 }),
+        },
+        {
           provide: CreateTransferUseCase,
           useFactory: (
             transactionRepository: TransactionRepository,
             v1: typeof mockExternalTransferV1,
             v2: typeof mockExternalTransferV2,
             metricsService: MetricsServicePort,
+            transferFeeCalculator: TransferFeeCalculator,
           ) =>
             new CreateTransferUseCase(
               transactionRepository,
               v1 as never,
               v2 as never,
               metricsService,
+              transferFeeCalculator,
             ),
           inject: [
             'TransactionRepository',
             'ExternalTransferV1',
             'ExternalTransferV2',
             'MetricsService',
+            TransferFeeCalculator,
           ],
         },
         {
@@ -167,7 +182,7 @@ describe('TransactionController (e2e)', () => {
       transaction: {
         id: 'tx-e2e-001',
         amount: 50000,
-        currency: 'PESOS',
+        currency: 'USD',
         description: 'Test e2e',
         receiver: {
           document: '12345678',
@@ -194,6 +209,7 @@ describe('TransactionController (e2e)', () => {
           id: 'tx-e2e-001',
           status: TransactionStatus.CONFIRMED,
           endToEndId: 'e2e-end-to-end-id',
+          fee: 1000,
           properties: {
             traceId: 'e2e-trace-id',
             eventDate: '2025-02-27T12:00:00Z',
@@ -313,7 +329,7 @@ describe('TransactionController (e2e)', () => {
       transaction: {
         id: 'tx-e2e-b',
         amount: 2000,
-        currency: 'PESOS',
+        currency: 'USD',
         description: 'Second',
         receiver: {
           document: '222',
@@ -404,7 +420,7 @@ describe('TransactionController (e2e)', () => {
     const storedTransaction = new Transaction(
       'tx-e2e-get',
       75000,
-      'USD',
+      Currency.USD,
       'E2E GET test',
       '111',
       'CC',
@@ -467,5 +483,33 @@ describe('TransactionController (e2e)', () => {
         },
       })
       .expect(400);
+  });
+
+  it('POST /transactions/transfer - unsupported currency returns 400 before BREB', async () => {
+    const server = app.getHttpServer() as unknown as Server;
+
+    await request(server)
+      .post('/transactions/transfer')
+      .set(IDEMPOTENCY_HEADER, 'e2e-key-bad-currency')
+      .send({
+        transaction: {
+          id: 'tx-e2e-bad-curr',
+          amount: 100,
+          currency: 'EUR',
+          description: 'bad currency',
+          receiver: {
+            document: '1',
+            documentType: 'CC',
+            name: 'X',
+            account: 'acc',
+            accountType: 'Ahorros',
+          },
+        },
+      })
+      .expect(400);
+
+    expect(mockExternalTransferV1.sendTransfer).not.toHaveBeenCalled();
+    expect(mockExternalTransferV2.sendTransfer).not.toHaveBeenCalled();
+    expect(mockTransactionRepository.save).not.toHaveBeenCalled();
   });
 });

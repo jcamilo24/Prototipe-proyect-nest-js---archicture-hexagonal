@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { parseTransactionCurrency } from 'src/transaction/domain/currency.enum';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
 import type { ExternalTransferResult } from 'src/transaction/domain/providers/external-transfer.service';
@@ -17,10 +18,12 @@ export function mapRequestToEntity(
 
   const { document, documentType, name, account, accountType } = t.receiver;
 
+  const currency = parseTransactionCurrency(t.id, t.currency);
+
   return new Transaction(
     t.id,
     t.amount,
-    t.currency,
+    currency,
     t.description,
     document,
     documentType,
@@ -45,6 +48,7 @@ export function mapResultToResponse(result: {
       eventDate: externalResponse.eventDate,
       traceId: externalResponse.traceId,
     },
+    fee: transaction.fee,
   };
 }
 

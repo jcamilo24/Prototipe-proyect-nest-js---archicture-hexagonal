@@ -1,3 +1,4 @@
+import { parseTransactionCurrency } from '../../../domain/currency.enum';
 import { Transaction } from '../../../domain/entity/transaction.entity';
 import { TransactionDocument } from './transaction.schema';
 
@@ -7,7 +8,7 @@ export class TransactionMapper {
     return new Transaction(
       doc.id,
       doc.amount,
-      doc.currency,
+      parseTransactionCurrency(doc.id, doc.currency),
       doc.description,
       doc.receiverDocument,
       doc.receiverDocumentType,
@@ -17,6 +18,7 @@ export class TransactionMapper {
       doc.status,
       doc.transactionDate ?? new Date(),
       doc.finalizedAt ?? null,
+      doc.fee ?? 0,
     );
   }
 
@@ -32,6 +34,7 @@ export class TransactionMapper {
       receiverAccount: entity.receiverAccount,
       receiverAccountType: entity.receiverAccountType,
       status: entity.status,
+      fee: entity.fee ?? 0,
       finalizedAt: entity.finalizedAt ?? undefined,
       transactionDate: entity.transactionDate ?? new Date(),
     };

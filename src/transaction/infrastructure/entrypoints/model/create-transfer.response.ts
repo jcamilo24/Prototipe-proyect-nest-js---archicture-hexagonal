@@ -9,4 +9,5 @@ export interface CreateTransferResponse {
     eventDate?: string;
     traceId: string;
   };
+  fee: number;
 }

@@ -15,7 +15,6 @@ interface BrebResponseData {
   qrCodeId?: string;
 }
 
-/** Maps external API status string to domain TransactionStatus. */
 function mapStatusToTransactionStatus(raw: string | undefined): TransactionStatus {
   if (!raw) return TransactionStatus.CREATED;
 

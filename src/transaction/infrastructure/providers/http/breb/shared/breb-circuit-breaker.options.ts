@@ -14,7 +14,6 @@ function parseEnvInt(value: string | undefined): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
-/** Lee variables `BREB_CIRCUIT_*` (mismo contrato que `CircuitBreakerOptions`). */
 export function getBrebCircuitBreakerOptions(
   config: ConfigService,
 ): CircuitBreakerOptions {

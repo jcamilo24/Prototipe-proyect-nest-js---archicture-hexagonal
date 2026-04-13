@@ -4,8 +4,11 @@ import {
 } from '@nestjs/common';
 import type { MetricsServicePort } from 'src/metrics/domain/providers/metrics.service.provider';
 import { CreateTransferUseCase } from 'src/transaction/application/use-cases/create-transfer.use-case';
+import { Currency } from 'src/transaction/domain/currency.enum';
+import { UnsupportedCurrencyException } from 'src/transaction/domain/unsupported-currency.exception';
 import { Transaction } from 'src/transaction/domain/entity/transaction.entity';
 import { TransactionStatus } from 'src/transaction/domain/transaction-status.enum';
+import { TransferFeeCalculator } from 'src/transaction/domain/transfer-fee.calculator';
 import type { ExternalTransferService } from 'src/transaction/domain/providers/external-transfer.service';
 import type { TransactionRepository } from 'src/transaction/domain/providers/transaction.repository';
 
@@ -22,7 +25,7 @@ describe('CreateTransferUseCase', () => {
   const mockTransaction = new Transaction(
     'tx-001',
     100000,
-    'PESOS',
+    Currency.USD,
     'Recarga',
     '123456',
     'CC',
@@ -62,6 +65,7 @@ describe('CreateTransferUseCase', () => {
       externalTransferV1 as unknown as ExternalTransferService,
       externalTransferV2 as unknown as ExternalTransferService,
       metricsService satisfies MetricsServicePort,
+      new TransferFeeCalculator({ copRate: 0.01, usdRate: 0.02 }),
     );
   });
 
@@ -73,7 +77,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      Currency.USD,
       'Recarga',
       '123456',
       'CC',
@@ -104,7 +108,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      Currency.USD,
       'Recarga',
       '123456',
       'CC',
@@ -125,7 +129,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      Currency.USD,
       'Recarga',
       '123456',
       'CC',
@@ -146,7 +150,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      Currency.USD,
       'Recarga',
       '123456',
       'CC',
@@ -170,7 +174,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      Currency.USD,
       'Recarga',
       '123456',
       'CC',
@@ -187,13 +191,44 @@ describe('CreateTransferUseCase', () => {
     );
   });
 
+  it('should propagate UnsupportedCurrencyException from fee calculation before external service', async () => {
+    const transactionForTest = new Transaction(
+      'tx-bad-currency',
+      1000,
+      'EUR' as unknown as Currency,
+      'x',
+      '1',
+      'CC',
+      'Name',
+      'acc',
+      'Ahorros',
+      TransactionStatus.CREATED,
+    );
+
+    const err = await useCase
+      .execute(transactionForTest, 'v1')
+      .then(
+        () => {
+          throw new Error('expected execute to reject');
+        },
+        (e) => e,
+      );
+    expect(err).toBeInstanceOf(UnsupportedCurrencyException);
+    expect(metricsService.increment).not.toHaveBeenCalledWith(
+      'transfer_failed',
+    );
+    expect(externalTransferV1.sendTransfer).not.toHaveBeenCalled();
+    expect(externalTransferV2.sendTransfer).not.toHaveBeenCalled();
+    expect(transactionRepository.save).not.toHaveBeenCalled();
+  });
+
   it('should rethrow HttpException from external service and increment transfer_failed', async () => {
     const ex = new BadGatewayException('upstream');
     externalTransferV1.sendTransfer.mockRejectedValue(ex);
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      Currency.USD,
       'Recarga',
       '123456',
       'CC',
@@ -213,7 +248,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      Currency.USD,
       'Recarga',
       '123456',
       'CC',
@@ -234,7 +269,7 @@ describe('CreateTransferUseCase', () => {
     const transactionForTest = new Transaction(
       'tx-001',
       100000,
-      'PESOS',
+      Currency.USD,
       'Recarga',
       '123456',
       'CC',
